@@ -688,3 +688,72 @@ func TestProvider_providerConfigure_project(t *testing.T) {
 		})
 	}
 }
+
+func TestProvider_providerConfigure_region(t *testing.T) {
+
+	cases := map[string]struct {
+		ConfigValues        map[string]interface{}
+		EnvVariables        map[string]string
+		ExpectedConfigValue string
+		ExpectedSchemaValue string
+		ExpectError         bool
+		ExpectFieldUnset    bool
+	}{
+		"region configured in the provider can be empty without resulting in errors": {
+			ConfigValues: map[string]interface{}{
+				"region": "not a valid region",
+			},
+			EnvVariables:        map[string]string{},
+			ExpectedConfigValue: "not a valid region",
+			ExpectedSchemaValue: "not a valid region",
+		},
+	}
+
+	for tn, tc := range cases {
+		t.Run(tn, func(t *testing.T) {
+
+			// Arrange
+			ctx := context.Background()
+			unsetTestProviderConfigEnvs(t)
+			setupTestEnvs(t, tc.EnvVariables)
+			p := Provider()
+			d := tpgresource.SetupTestResourceDataFromConfigMap(t, p.Schema, tc.ConfigValues)
+
+			// Act
+			c, diags := providerConfigure(ctx, d, p)
+
+			// Assert
+			if diags.HasError() && !tc.ExpectError {
+				t.Fatalf("unexpected error(s): %#v", diags)
+			}
+			if !diags.HasError() && tc.ExpectError {
+				t.Fatal("expected error(s) but got none")
+			}
+			if diags.HasError() && tc.ExpectError {
+				v, ok := d.GetOk("region")
+				if ok {
+					val := v.(string)
+					if val != tc.ExpectedSchemaValue {
+						t.Fatalf("expected region value set in provider data to be %s, got %s", tc.ExpectedSchemaValue, val)
+					}
+					if tc.ExpectFieldUnset {
+						t.Fatalf("expected region value to not be set in provider data, got %s", val)
+					}
+				}
+				// Return early in tests where errors expected
+				return
+			}
+
+			v := d.Get("region")
+			val := v.(string)
+			config := c.(*transport_tpg.Config) // Should be non-nil value, as test cases reaching this point experienced no errors
+
+			if val != tc.ExpectedSchemaValue {
+				t.Fatalf("expected region value set in provider data to be %s, got %s", tc.ExpectedSchemaValue, val)
+			}
+			if config.Region != tc.ExpectedConfigValue {
+				t.Fatalf("expected region value in provider struct to be %s, got %s", tc.ExpectedConfigValue, config.Region)
+			}
+		})
+	}
+}
