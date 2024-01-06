@@ -25,25 +25,18 @@ references:
 description: |-
   A trained machine learning Model.
 id_format: '{{name}}'
-autogen_async: false
+update_verb: 'PATCH'
 exclude_import: true
 async:
-  actions:
-    - create
-    - delete
+  actions: ['create', 'delete', 'update']
+  type: 'OpAsync'
   operation:
-    path: 'name'
     base_url: '{{op_id}}'
+    path: 'name'
     wait_ms: 1000
   result:
     path: 'response'
     resource_inside_response: true
-  status:
-    path: 'done'
-    complete: true
-    allowed:
-      - true
-      - false
   error:
     path: 'error'
     message: 'message'
@@ -156,6 +149,7 @@ properties:
       This field is populated if the model is produced by a pipeline job.
   - type: NestedObject
     name: 'containerSpec'
+    default_from_api: true
     description: |
       The specification of the container that is to be used when deploying this Model.
     properties:
@@ -276,6 +270,7 @@ properties:
   - type: String
     name: 'artifactUri'
     immutable: true
+    default_from_api: true
     description: |
       The path to the directory containing the Model artifact and any of its supporting files.
   - type: String
@@ -290,6 +285,7 @@ properties:
       The timestamp of when the MetadataStore was last updated in RFC3339 UTC "Zulu" format, with nanosecond resolution and up to nine fractional digits.
   - type: String
     name: 'displayName'
+    default_from_api: true
     description:
       The display name of the Model. The name can be up to 128 characters long
       and can consist of any UTF-8 characters.
@@ -300,6 +296,7 @@ properties:
     ignore_read: true
   - type: Array
     name: 'versionAliases'
+    default_from_api: true
     description:
       user provided version aliases so that a model version can be referenced via alias.
     item_type:
@@ -323,24 +320,6 @@ properties:
     name: 'metadata'
     description: An additional information about the Index
     properties:
-      - type: String
-        name: 'contentsDeltaUri'
-        required: true
-        description: |-
-          Allows inserting, updating  or deleting the contents of the Matching Engine Index.
-          The string must be a valid Cloud Storage directory path. If this
-          field is set when calling IndexService.UpdateIndex, then no other
-          Index field can be also updated as part of the same call.
-          The expected structure and format of the files this URI points to is
-          described at https://cloud.google.com/vertex-ai/docs/matching-engine/using-matching-engine#input-data-format
-        custom_flatten: templates/terraform/custom_flatten/vertex_ai_index_ignore_contents_delta_uri.go.tmpl
-      - type: Boolean
-        name: 'isCompleteOverwrite'
-        description: |-
-          If this field is set together with contentsDeltaUri when calling IndexService.UpdateIndex,
-          then existing content of the Index will be replaced by the data from the contentsDeltaUri.
-        default_value: false
-        custom_flatten: templates/terraform/custom_flatten/vertex_ai_index_ignore_is_complete_overwrite.go.tmpl
       - type: NestedObject
         name: 'config'
         immutable: true
@@ -424,6 +403,7 @@ properties:
                   standard linear search in the database for each query.
   - type: String
     name: 'sourceModel'
+    default_from_api: true
     at_least_one_of:
       - model
       - sourceModel
@@ -440,5 +420,6 @@ properties:
       The Model to create.
   - type: String
     name: 'modelId'
+    default_from_api: true
     description: |
       Copy sourceModel into a new Model with this ID. The ID will become the final component of the model resource name.
