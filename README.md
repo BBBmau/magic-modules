@@ -1,6 +1,6 @@
 <img src="docs/static/magic-modules.svg" alt="Magic Modules Logo" width="300" align="right" />
 
-# Magic Modules
+# Magic Modules - mau
 
 Magic Modules is a code generator and CI system that's used to develop the Terraform providers
 for Google Cloud Platform, [`google`](https://github.com/hashicorp/terraform-provider-google) (or TPG) and
