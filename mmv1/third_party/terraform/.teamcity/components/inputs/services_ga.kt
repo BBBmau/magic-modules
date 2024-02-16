@@ -13,6 +13,11 @@ var ServicesListGa = mapOf(
         "displayName" to "Accessapproval",
         "path" to "./google/services/accessapproval"
     ),
+    "supersql" to mapOf(
+        "name" to "accessapproval",
+        "displayName" to "Accessapproval",
+        "path" to "./google/services/accessapproval"
+    ),
     "accesscontextmanager" to mapOf(
         "name" to "accesscontextmanager",
         "displayName" to "Accesscontextmanager",
