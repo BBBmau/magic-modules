@@ -13,6 +13,11 @@ var ServicesListBeta = mapOf(
         "displayName" to "Accessapproval",
         "path" to "./google-beta/services/accessapproval"
     ),
+    "supersql" to mapOf(
+        "name" to "accessapproval",
+        "displayName" to "Accessapproval",
+        "path" to "./google-beta/services/accessapproval"
+    ),
     "accesscontextmanager" to mapOf(
         "name" to "accesscontextmanager",
         "displayName" to "Accesscontextmanager",
