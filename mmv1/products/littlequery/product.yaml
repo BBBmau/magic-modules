@@ -12,7 +12,7 @@
 # limitations under the License.
 
 --- !ruby/object:Api::Product
-name: littleQuery
+name: LittleQuery
 display_name: Little Query
 versions:
   - !ruby/object:Api::Product::Version
