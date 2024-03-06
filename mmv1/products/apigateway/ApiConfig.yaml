@@ -128,7 +128,7 @@ properties:
     name: 'gatewayConfig'
     immutable: true
     description: |
-      Immutable. Gateway specific configuration.
+      Change. Gateway specific configuration.
       If not specified, backend authentication will be set to use OIDC authentication using the default compute service account
     ignore_read: true
     properties:
