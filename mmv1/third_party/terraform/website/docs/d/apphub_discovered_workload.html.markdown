@@ -1,10 +1,10 @@
 ---
-subcategory: "Apphub"
+subcategory: "App Hub"
 description: |-
   Get information about a discovered workload.
 ---
 
-# google\_apphub\_discovered_workload
+# google_apphub_discovered_workload
 
 Get information about a discovered workload from its uri.
 

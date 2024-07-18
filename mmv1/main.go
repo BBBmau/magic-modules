@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -8,28 +9,69 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"golang.org/x/exp/slices"
 
 	"github.com/GoogleCloudPlatform/magic-modules/mmv1/api"
-	"github.com/GoogleCloudPlatform/magic-modules/mmv1/google"
 	"github.com/GoogleCloudPlatform/magic-modules/mmv1/provider"
 )
 
+// TODO Q2: additional flags
+
+// Example usage: --output $GOPATH/src/github.com/terraform-providers/terraform-provider-google-beta
+var outputPath = flag.String("output", "", "path to output generated files to")
+
+// Example usage: --version beta
+var version = flag.String("version", "", "optional version name. If specified, this version is preferred for resource generation when applicable")
+
+var product = flag.String("product", "", "optional product name. If specified, the resources under the specific product will be generated. Otherwise, resources under all products will be generated.")
+
+// Example usage: --yaml
+var yamlMode = flag.Bool("yaml", false, "copy text over from ruby yaml to go yaml")
+
+// Example usage: --template
+var templateMode = flag.Bool("template", false, "copy templates over from .erb to go .tmpl")
+
+// Example usage: --handwritten
+var handwrittenMode = flag.Bool("handwritten", false, "copy handwritten files over from .erb to go .tmpl")
+
 func main() {
-	// TODO Q2: parse flags
-	var version = "beta"
-	var outputPath = "."
+
+	flag.Parse()
+
+	if *yamlMode {
+		CopyAllDescriptions()
+	}
+
+	if *templateMode {
+		convertTemplates()
+	}
+
+	if *handwrittenMode {
+		convertAllHandwrittenFiles()
+	}
+
+	if outputPath == nil || *outputPath == "" {
+		log.Printf("No output path specified, exiting")
+		return
+	}
+
+	if version == nil || *version == "" {
+		log.Printf("No version specified, assuming ga")
+		*version = "ga"
+	}
+
 	var generateCode = true
 	var generateDocs = true
-
-	log.Printf("Initiating go MM compiler")
-
-	// TODO Q1: allow specifying one product (flag or hardcoded)
-	// var productsToGenerate []string
-	// var allProducts = true
-	var productsToGenerate = []string{"products/datafusion"}
+	var productsToGenerate []string
 	var allProducts = false
+	if product == nil || *product == "" {
+		allProducts = true
+	} else {
+		var productToGenerate = fmt.Sprintf("products/%s", *product)
+		productsToGenerate = []string{productToGenerate}
+	}
 
 	var allProductFiles []string = make([]string, 0)
 
@@ -51,8 +93,9 @@ func main() {
 		log.Fatalf("No product.yaml file found.")
 	}
 
-	log.Printf("Generating MM output to '%s'", outputPath)
-	log.Printf("Using %s version", version)
+	startTime := time.Now()
+	log.Printf("Generating MM output to '%s'", *outputPath)
+	log.Printf("Using %s version", *version)
 
 	// Building compute takes a long time and can't be parallelized within the product
 	// so lets build it first
@@ -63,8 +106,11 @@ func main() {
 		return false
 	})
 
-	yamlValidator := google.YamlValidator{}
-
+	// In order to only copy/compile files once per provider this must be called outside
+	// of the products loop. This will get called with the provider from the final iteration
+	// of the loop
+	var providerToGenerate *provider.Terraform
+	var productsForVersion []*api.Product
 	for _, productName := range allProductFiles {
 		productYamlPath := path.Join(productName, "go_product.yaml")
 
@@ -77,24 +123,13 @@ func main() {
 		// TODO Q2: product overrides
 
 		if _, err := os.Stat(productYamlPath); err == nil {
-			// TODO Q1: remove these lines, which are for debugging
-			// log.Printf("productYamlPath %#v", productYamlPath)
-
 			var resources []*api.Resource = make([]*api.Resource, 0)
 
-			productYaml, err := os.ReadFile(productYamlPath)
-			if err != nil {
-				log.Fatalf("Cannot open the file: %v", productYaml)
-			}
 			productApi := &api.Product{}
-			yamlValidator.Parse(productYaml, productApi)
+			api.Compile(productYamlPath, productApi)
 
-			// TODO Q1: remove these lines, which are for debugging
-			// prod, _ := json.Marshal(productApi)
-			// log.Printf("prod %s", string(prod))
-
-			if !productApi.ExistsAtVersionOrLower(version) {
-				log.Printf("%s does not have a '%s' version, skipping", productName, version)
+			if !productApi.ExistsAtVersionOrLower(*version) {
+				log.Printf("%s does not have a '%s' version, skipping", productName, *version)
 				continue
 			}
 
@@ -112,27 +147,17 @@ func main() {
 					continue
 				}
 
-				// TODO Q1: remove these lines, which are for debugging
-				// log.Printf(" resourceYamlPath %s", resourceYamlPath)
-				resourceYaml, err := os.ReadFile(resourceYamlPath)
-				if err != nil {
-					log.Fatalf("Cannot open the file: %v", resourceYamlPath)
-				}
 				resource := &api.Resource{}
-				yamlValidator.Parse(resourceYaml, resource)
+				api.Compile(resourceYamlPath, resource)
 
-				// TODO Q1: remove these lines, which are for debugging
-				// res, _ := json.Marshal(resource)
-				// log.Printf("resource %s", string(res))
-
-				// TODO Q1: add labels related fields
-
+				resource.TargetVersionName = *version
+				resource.Properties = resource.AddLabelsRelatedFields(resource.PropertiesWithExcluded(), nil)
+				resource.SetDefault(productApi)
 				resource.Validate()
 				resources = append(resources, resource)
 			}
 
 			// TODO Q2: override resources
-			log.Printf("resources before sorting %#v", resources)
 
 			// Sort resources by name
 			sort.Slice(resources, func(i, j int) bool {
@@ -143,7 +168,9 @@ func main() {
 			productApi.Validate()
 
 			// TODO Q2: set other providers via flag
-			providerToGenerate := provider.NewTerraform(productApi)
+			providerToGenerate = provider.NewTerraform(productApi, *version, startTime)
+
+			productsForVersion = append(productsForVersion, productApi)
 
 			if !slices.Contains(productsToGenerate, productName) {
 				log.Printf("%s not specified, skipping generation", productName)
@@ -151,9 +178,20 @@ func main() {
 			}
 
 			log.Printf("%s: Generating files", productName)
-			providerToGenerate.Generate(outputPath, productName, generateCode, generateDocs)
+			providerToGenerate.Generate(*outputPath, productName, generateCode, generateDocs)
 		}
+	}
 
-		// TODO Q2: copy common files
+	slices.SortFunc(productsForVersion, func(p1, p2 *api.Product) int {
+		return strings.Compare(strings.ToLower(p1.Name), strings.ToLower(p2.Name))
+	})
+
+	providerToGenerate.CopyCommonFiles(*outputPath, generateCode, generateDocs)
+
+	log.Printf("Compiling common files for terraform")
+	if generateCode {
+		providerToGenerate.CompileCommonFiles(*outputPath, productsForVersion, "")
+
+		// TODO Q2: product overrides
 	}
 }
