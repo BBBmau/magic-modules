@@ -86,6 +86,7 @@ runs:
             else
               export VERSION=beta
             fi
+            clone_repo
             make clean-provider
             make provider
           elif [ "$GH_REPO" == "terraform-google-conversion" ]; then
