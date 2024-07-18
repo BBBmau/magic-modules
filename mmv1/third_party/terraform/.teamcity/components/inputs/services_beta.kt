@@ -466,6 +466,11 @@ var ServicesListBeta = mapOf(
         "displayName" to "Integrationconnectors",
         "path" to "./google-beta/services/integrationconnectors"
     ),
+    "integrations" to mapOf(
+        "name" to "integrations",
+        "displayName" to "Applicationintegration",
+        "path" to "./google-beta/services/integrations"
+    ),
     "kms" to mapOf(
         "name" to "kms",
         "displayName" to "Kms",
@@ -480,6 +485,11 @@ var ServicesListBeta = mapOf(
         "name" to "looker",
         "displayName" to "Looker",
         "path" to "./google-beta/services/looker"
+    ),
+    "managedkafka" to mapOf(
+        "name" to "managedkafka",
+        "displayName" to "Managedkafka",
+        "path" to "./google-beta/services/managedkafka"
     ),
     "memcache" to mapOf(
         "name" to "memcache",
@@ -546,10 +556,20 @@ var ServicesListBeta = mapOf(
         "displayName" to "Oslogin",
         "path" to "./google-beta/services/oslogin"
     ),
+    "parallelstore" to mapOf(
+        "name" to "parallelstore",
+        "displayName" to "Parallelstore",
+        "path" to "./google/services/parallelstore"
+    ),
     "privateca" to mapOf(
         "name" to "privateca",
         "displayName" to "Privateca",
         "path" to "./google-beta/services/privateca"
+    ),
+    "privilegedaccessmanager" to mapOf(
+        "name" to "privilegedaccessmanager",
+        "displayName" to "Privilegedaccessmanager",
+        "path" to "./google-beta/services/privilegedaccessmanager"
     ),
     "publicca" to mapOf(
         "name" to "publicca",
@@ -601,6 +621,16 @@ var ServicesListBeta = mapOf(
         "displayName" to "Securitycenter",
         "path" to "./google-beta/services/securitycenter"
     ),
+    "securitycentermanagement" to mapOf(
+        "name" to "securitycentermanagement",
+        "displayName" to "Securitycentermanagement",
+        "path" to "./google-beta/services/securitycentermanagement"
+    ),
+    "securitycenterv2" to mapOf(
+        "name" to "securitycenterv2",
+        "displayName" to "securitycenterv2",
+        "path" to "./google-beta/services/securitycenterv2"
+    ),
     "securityposture" to mapOf(
         "name" to "securityposture",
         "displayName" to "Securityposture",
@@ -630,6 +660,11 @@ var ServicesListBeta = mapOf(
         "name" to "serviceusage",
         "displayName" to "Serviceusage",
         "path" to "./google-beta/services/serviceusage"
+    ),
+    "siteverification" to mapOf(
+        "name" to "siteverification",
+        "displayName" to "Siteverification",
+        "path" to "./google-beta/services/siteverification"
     ),
     "sourcerepo" to mapOf(
         "name" to "sourcerepo",
@@ -675,6 +710,11 @@ var ServicesListBeta = mapOf(
         "name" to "tpuv2",
         "displayName" to "Tpuv2",
         "path" to "./google-beta/services/tpuv2"
+    ),
+     "transcoder" to mapOf(
+        "name" to "transcoder",
+        "displayName" to "Transcoder",
+        "path" to "./google-beta/services/transcoder"
     ),
     "vertexai" to mapOf(
         "name" to "vertexai",
