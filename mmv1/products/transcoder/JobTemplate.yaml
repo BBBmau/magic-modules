@@ -24,7 +24,6 @@ references: !ruby/object:Api::Resource::ReferenceLinks
     "Transcoder": "https://cloud.google.com/transcoder/docs/"
   api: "https://cloud.google.com/transcoder/docs/reference/rest/v1/projects.locations.jobTemplates"
 import_format: ["projects/{{project}}/locations/{{location}}/jobTemplates/{{job_template_id}}"]
-autogen_async: true
 examples:
   - !ruby/object:Provider::Terraform::Examples
     name: "transcoder_job_template_basic"
