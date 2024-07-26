@@ -1,6 +1,7 @@
 resource "google_transcoder_job_template" "<%= ctx[:primary_resource_id] %>" {
   name     = "<%= ctx[:vars]['job_template_name'] %>"
   location = "us-central1"
+  job_template_id = "<%= ctx[:vars]['job_template_id'] %>"
 
   config {
     inputs {

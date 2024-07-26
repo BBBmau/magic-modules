@@ -30,6 +30,7 @@ examples:
     primary_resource_id: "default"
     vars:
       job_name: "job"
+      job_template_id: "job-template-id-2"
 parameters:
   - !ruby/object:Api::Type::String
     name: "location"
