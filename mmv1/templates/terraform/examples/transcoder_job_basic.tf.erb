@@ -9,9 +9,9 @@ resource "google_transcoder_job" "<%= ctx[:primary_resource_id] %>" {
 }
 
 resource "google_transcoder_job_template" "default" {
-  name     = "example"
-  location = "us-central1"
+  name     = "<%= ctx[:vars]['job_template_name'] %>"
   job_template_id = "<%= ctx[:vars]['job_template_id'] %>"
+  location = "us-central1"
   config {
     inputs {
       key = "input0"

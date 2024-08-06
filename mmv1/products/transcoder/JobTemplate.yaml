@@ -29,8 +29,8 @@ examples:
     name: "transcoder_job_template_basic"
     primary_resource_id: "default"
     vars:
-      job_template_name: "job-template"
-      job_template_id: "job-template-id-1"
+      job_template_name: "example-job-template"
+      job_template_id: "example-job-template"
 parameters:
   - !ruby/object:Api::Type::String
     name: "jobTemplateId"
