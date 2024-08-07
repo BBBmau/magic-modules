@@ -31,6 +31,9 @@ resource "google_transcoder_job_template" "default" {
       key = "input0"
       uri = google_storage_bucket_object.example_mp4.self_link
     }
+    ouput {
+      uri = "${google_storage_bucket.<%= ctx[:primary_resource_id] %>.self_link}/transcoded.mp4"
+    }
     edit_list {
       key               = "atom0"
       inputs            = ["input0"]
