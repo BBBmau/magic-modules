@@ -1,8 +1,3 @@
-if obj["sourceModel"] != nil {
-    delete(obj, "labels")
-    delete(obj, "metadata")
-}
-
 newObj := make(map[string]interface{})
 name := ""
 if v, ok := d.GetOk("model_id"); ok {
@@ -18,5 +13,3 @@ if v, ok := d.GetOk("parent_model"); ok {
 }
 newObj["model"] = obj
 return newObj, nil
-
-return obj, nil
