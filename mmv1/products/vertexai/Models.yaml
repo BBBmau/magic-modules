@@ -37,6 +37,12 @@ async:
   result:
     path: 'response'
     resource_inside_response: true
+  status:
+    path: 'done'
+    complete: true
+    allowed:
+      - true
+      - false
   error:
     path: 'error'
     message: 'message'
