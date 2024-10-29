@@ -1,3 +1,16 @@
+if obj["modelName"] != nil {
+    newObj := make(map[string]interface{})
+    obj["displayName"] = obj["modelName"]
+    delete(obj, "modelName")
+    newObj["model"] = obj
+    newObj["modelId"] = obj["modelId"]
+    delete(obj, "modelId")
+    return newObj, nil
+} else if obj["sourceModel"] != nil {
+    delete(obj, "labels")
+    delete(obj, "metadata")
+}
+
 newObj := make(map[string]interface{})
 name := ""
 if v, ok := d.GetOk("model_id"); ok {
@@ -13,3 +26,5 @@ if v, ok := d.GetOk("parent_model"); ok {
 }
 newObj["model"] = obj
 return newObj, nil
+
+return obj, nil

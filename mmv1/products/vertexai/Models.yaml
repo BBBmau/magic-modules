@@ -37,12 +37,6 @@ async:
   result:
     path: 'response'
     resource_inside_response: true
-  status:
-    path: 'done'
-    complete: true
-    allowed:
-      - true
-      - false
   error:
     path: 'error'
     message: 'message'
@@ -138,6 +132,7 @@ properties:
             The ID of the export format.
         - type: Enum
           name: exportableContent
+          default_from_api: true
           immutable: true
           description: |
             The content of this Model that may be exported.
@@ -290,8 +285,10 @@ properties:
     description: |
       The timestamp of when the MetadataStore was last updated in RFC3339 UTC "Zulu" format, with nanosecond resolution and up to nine fractional digits.
   - type: String
-    name: 'displayName'
-    default_from_api: true
+    name: 'modelName'
+    at_least_one_of:
+      - modelName
+      - sourceModel
     description:
       The display name of the Model. The name can be up to 128 characters long
       and can consist of any UTF-8 characters.
@@ -302,7 +299,7 @@ properties:
     ignore_read: true
   - type: Array
     name: 'versionAliases'
-    default_from_api: true
+    ignore_read: true
     description:
       user provided version aliases so that a model version can be referenced via alias.
     item_type:
@@ -324,6 +321,7 @@ properties:
         immutable: true
   - type: NestedObject
     name: 'metadata'
+    ignore_read: true
     description: An additional information about the Index
     properties:
       - type: NestedObject
@@ -411,20 +409,15 @@ properties:
     name: 'sourceModel'
     default_from_api: true
     at_least_one_of:
-      - model
+      - modelName
       - sourceModel
     description: |
       The resource name of the Model to copy. That Model must be in the same Project
-  - type: ResourceRef
-    name: 'model'
-    resource: 'Model'
-    imports: 'displayName'
-    at_least_one_of:
-      - sourceModel
-      - model
+  - type: String
+    name: 'modelId'
+    default_from_api: true
     description: |
-      The Model to create.
-    custom_expand: 'templates/terraform/custom_expand/resourceref_with_validation.go.erb'
+      Copy sourceModel into a new Model with this ID. The ID will become the final component of the model resource name.
   - type: NestedObject
     name: 'explanationSpec'
     description: The pointers to DeployedModels created from this Model. Note that Model could have been deployed to Endpoints in different Locations.
@@ -443,7 +436,8 @@ properties:
             name: 'outputIndices'
             description: If populated, only returns attributions that have outputIndex contained in outputIndices.
             immutable: true
-            item_type: Api::Type::Double
+            item_type:
+              type: Double
           ## Union field method can be only one of the following
           - type: NestedObject
             name: 'sampledShapleyAttribution'
@@ -486,16 +480,16 @@ properties:
                       - type: Array
                         name: 'noiseSigma'
                         description: The number of gradient samples to use for approximation.
-                        item_type: 
+                        item_type:
                           type: NestedObject
                           properties:
                             - type: String
                               name: 'name'
                               description: The name of the input feature for which noise sigma is provided.
-                            - type: Double
-                              name: 'sigma'
-                              description: This represents the standard deviation of the Gaussian kernel that will be used to add noise to the feature prior to computing gradients.
-                              default_value: 0.1
+                            # - type: Double
+                            #   name: 'sigma'
+                            #   description: This represents the standard deviation of the Gaussian kernel that will be used to add noise to the feature prior to computing gradients.
+                            #   default_value: 0.1
               - type: NestedObject
                 name: 'blurBaselineConfig'
                 description: Config for IG with blur baseline.
@@ -531,7 +525,7 @@ properties:
                       - type: Array
                         name: 'noiseSigma'
                         description: The number of gradient samples to use for approximation.
-                        item_type: 
+                        item_type:
                           type: NestedObject
                           properties:
                             - type: String
@@ -564,7 +558,7 @@ properties:
                   - type: Enum
                     name: 'dataFormat'
                     description: 'The format in which instances are given, if not specified, assume its JSONL format. Currently only JSONL format is supported.'
-                    values:
+                    enum_values:
                       - :JSONL
                   - type: NestedObject
                     name: 'gcsSource'
@@ -574,7 +568,8 @@ properties:
                         name: 'uris'
                         required: true
                         description: 'Google Cloud Storage URI(-s) to the input file(s). May contain wildcards.'
-                        item_type: Api::Type::String
+                        item_type:
+                          type: String
               - type: NestedObject
                 name: 'nearestNeighborSearchConfig'
                 description: The number of neighbors to return when querying for examples.
@@ -691,14 +686,14 @@ properties:
                   - type: Enum
                     name: 'modality'
                     description: The modality of the uploaded model, which automatically configures the distance measurement and feature normalization for the underlying example index and queries
-                    values:
+                    enum_values:
                       - :IMAGE
                       - :TEXT
                       - :TABULAR
                   - type: Enum
                     name: 'query'
                     description: Preset option controlling parameters for speed-precision trade-off when querying for examples. If omitted, defaults to PRECISE.
-                    values:
+                    enum_values:
                       - :PRECISE
                       - :FAST
       - type: NestedObject
@@ -710,7 +705,7 @@ properties:
             key_name: 'name'
             description: The resource name of the Artifact that was created in MetadataStore when creating the Model.
             required: true
-            value_type: 
+            value_type:
               type: NestedObject
               properties:
                 - type: String
@@ -721,7 +716,7 @@ properties:
                   name: 'encoding'
                   description: |
                     Defines how the feature is encoded into the input tensor. Defaults to IDENTITY.
-                  values:
+                  enum_values:
                     - IDENTITY
                     - BAG_OF_FEATURES
                     - BAG_OF_FEATURES_SPARSE
@@ -768,7 +763,8 @@ properties:
                   required: true
                   description: |
                     A list of feature names for each index in the input tensor.
-                  item_type: Api::Type::String
+                  item_type: 
+                    type: String
                 - type: String
                   name: 'encodedTensorName'
                   description: |
@@ -777,7 +773,8 @@ properties:
                   name: 'encodedBaselines'
                   description: |
                     A list of baselines for the encoded tensor.
-                  item_type: Api::Type::Double
+                  item_type:
+                    type: Double
                 - type: NestedObject
                   name: 'visualization'
                   required: true
@@ -788,7 +785,7 @@ properties:
                       name: 'type'
                       description: |
                         type of the image visualization. Only applicable to Integrated Gradients attribution.
-                      values:
+                      enum_values:
                         - :PIXELS
                         - :OUTLINES
                     - type: Enum
@@ -796,7 +793,7 @@ properties:
                       description: |
                         Whether to only highlight pixels with positive contributions, negative or both. Defaults to POSITIVE.
                       default_value: :BOTH
-                      values:
+                      enum_values:
                         - :POSITIVE
                         - :NEGATIVE
                         - :BOTH
@@ -804,7 +801,7 @@ properties:
                       name: 'colorMap'
                       description: |
                         The color scheme used for highlighting areas.
-                      values:
+                      enum_values:
                         - :PINK_GREEN
                         - :VIRIDIS
                         - :RED
@@ -825,7 +822,7 @@ properties:
                       name: 'overlayType'
                       description: |
                         How the original image is displayed in the visualization.
-                      values:
+                      enum_values:
                         - :NONE
                         - :ORIGINAL
                         - :GRAYSCALE
@@ -840,7 +837,7 @@ properties:
             key_name: 'name'
             description: The resource name of the Artifact that was created in MetadataStore when creating the Model.
             required: true
-            value_type: 
+            value_type:
               type: NestedObject
               properties:
                 - type: String
@@ -852,7 +849,8 @@ properties:
                   name: 'indexDisplayNameMapping'
                   description: |
                     Static mapping between the index and display name.
-                  item_type: Api::Type::String
+                  item_type:
+                    type: String
                 - type: String
                   name: 'displayNameMappingKey'
                   description: |
@@ -864,8 +862,3 @@ properties:
           - type: String
             name: 'latentSpaceSource'
             description: name of the source to generate embeddings for example based explanations.
-  - type: String
-    name: 'modelId'
-    default_from_api: true
-    description: |
-      Copy sourceModel into a new Model with this ID. The ID will become the final component of the model resource name.
