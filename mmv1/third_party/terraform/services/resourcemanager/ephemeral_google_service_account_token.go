@@ -3,7 +3,6 @@ package resourcemanager
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
@@ -11,8 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-provider-google/google/fwtransport"
+	"github.com/hashicorp/terraform-provider-google/google/fwvalidators"
 	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
 	"google.golang.org/api/iamcredentials/v1"
 )
@@ -45,7 +44,7 @@ func (p *googleEphemeralServiceAccountAccessToken) Schema(ctx context.Context, r
 			"target_service_account": schema.StringAttribute{
 				Required: true,
 				Validators: []validator.String{
-					serviceAccountNameValidator{},
+					fwvalidators.ServiceAccountNameValidator{},
 				},
 			},
 			"access_token": schema.StringAttribute{
@@ -56,22 +55,23 @@ func (p *googleEphemeralServiceAccountAccessToken) Schema(ctx context.Context, r
 				Optional: true,
 				Computed: true,
 				Validators: []validator.String{
-					durationValidator{
-						maxDuration: 3600 * time.Second,
-					}},
+					fwvalidators.DurationValidator{
+						MaxDuration: 3600 * time.Second,
+					},
+				},
 			},
 			"scopes": schema.SetAttribute{
 				Required:    true,
 				ElementType: types.StringType,
 				Validators: []validator.Set{
-					setvalidator.ValueStringsAre(ServiceScopeValidator{}),
+					setvalidator.ValueStringsAre(fwvalidators.ServiceScopeValidator{}),
 				},
 			},
 			"delegates": schema.SetAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
 				Validators: []validator.Set{
-					setvalidator.ValueStringsAre(serviceAccountNameValidator{}),
+					setvalidator.ValueStringsAre(fwvalidators.ServiceAccountNameValidator{}),
 				},
 			},
 		},
@@ -125,13 +125,13 @@ func (p *googleEphemeralServiceAccountAccessToken) Open(ctx context.Context, req
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		delegates = StringSet(DelegatesSetValue)
+		delegates = fwvalidators.StringSet(DelegatesSetValue)
 	}
 
 	tokenRequest := &iamcredentials.GenerateAccessTokenRequest{
 		Lifetime:  data.Lifetime.ValueString(),
 		Delegates: delegates,
-		Scope:     tpgresource.CanonicalizeServiceScopes(StringSet(ScopesSetValue)),
+		Scope:     tpgresource.CanonicalizeServiceScopes(fwvalidators.StringSet(ScopesSetValue)),
 	}
 
 	at, err := service.Projects.ServiceAccounts.GenerateAccessToken(name, tokenRequest).Do()
@@ -145,131 +145,4 @@ func (p *googleEphemeralServiceAccountAccessToken) Open(ctx context.Context, req
 
 	data.AccessToken = types.StringValue(at.AccessToken)
 	resp.Diagnostics.Append(resp.Result.Set(ctx, data)...)
-}
-
-func StringSet(d basetypes.SetValue) []string {
-
-	StringSlice := make([]string, 0)
-	for _, v := range d.Elements() {
-		StringSlice = append(StringSlice, v.(basetypes.StringValue).ValueString())
-	}
-	return StringSlice
-}
-
-// Define the possible service account name patterns
-var serviceAccountNamePatterns = []string{
-	`^.+@.+\.iam\.gserviceaccount\.com$`,                     // Standard IAM service account
-	`^.+@developer\.gserviceaccount\.com$`,                   // Legacy developer service account
-	`^.+@appspot\.gserviceaccount\.com$`,                     // App Engine service account
-	`^.+@cloudservices\.gserviceaccount\.com$`,               // Google Cloud services service account
-	`^.+@cloudbuild\.gserviceaccount\.com$`,                  // Cloud Build service account
-	`^service-[0-9]+@.+-compute\.iam\.gserviceaccount\.com$`, // Compute Engine service account
-}
-
-// Create a custom validator for service account names
-type serviceAccountNameValidator struct{}
-
-func (v serviceAccountNameValidator) Description(ctx context.Context) string {
-	return "value must be a valid service account email address"
-}
-
-func (v serviceAccountNameValidator) MarkdownDescription(ctx context.Context) string {
-	return v.Description(ctx)
-}
-
-func (v serviceAccountNameValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-
-	value := req.ConfigValue.ValueString()
-	valid := false
-	for _, pattern := range serviceAccountNamePatterns {
-		if matched, _ := regexp.MatchString(pattern, value); matched {
-			valid = true
-			break
-		}
-	}
-
-	if !valid {
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Invalid Service Account Name",
-			"Service account name must match one of the expected patterns for Google service accounts",
-		)
-	}
-}
-
-// Create a custom validator for duration
-type durationValidator struct {
-	maxDuration time.Duration
-}
-
-func (v durationValidator) Description(ctx context.Context) string {
-	return fmt.Sprintf("value must be a valid duration string less than or equal to %v", v.maxDuration)
-}
-
-func (v durationValidator) MarkdownDescription(ctx context.Context) string {
-	return v.Description(ctx)
-}
-
-func (v durationValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-
-	value := req.ConfigValue.ValueString()
-	duration, err := time.ParseDuration(value)
-	if err != nil {
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Invalid Duration Format",
-			"Duration must be a valid duration string (e.g., '3600s', '1h')",
-		)
-		return
-	}
-
-	if duration > v.maxDuration {
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Duration Too Long",
-			fmt.Sprintf("Duration must be less than or equal to %v", v.maxDuration),
-		)
-	}
-}
-
-// ServiceScopeValidator validates that a service scope is in canonical form
-var _ validator.String = &ServiceScopeValidator{}
-
-// ServiceScopeValidator validates service scope strings
-type ServiceScopeValidator struct {
-}
-
-// Description returns a plain text description of the validator's behavior
-func (v ServiceScopeValidator) Description(ctx context.Context) string {
-	return "service scope must be in canonical form"
-}
-
-// MarkdownDescription returns a markdown formatted description of the validator's behavior
-func (v ServiceScopeValidator) MarkdownDescription(ctx context.Context) string {
-	return v.Description(ctx)
-}
-
-// ValidateString performs the validation
-func (v ServiceScopeValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
-	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		return
-	}
-
-	canonicalized := tpgresource.CanonicalizeServiceScope(req.ConfigValue.ValueString())
-	if req.ConfigValue.ValueString() != canonicalized {
-		resp.Diagnostics.AddAttributeWarning(
-			req.Path,
-			"Non-canonical service scope",
-			fmt.Sprintf("Service scope %q will be canonicalized to %q",
-				req.ConfigValue.ValueString(),
-				canonicalized,
-			),
-		)
-	}
 }
