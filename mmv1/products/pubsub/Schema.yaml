@@ -78,6 +78,7 @@ properties:
   - name: 'definition'
     type: String
     description: |
+      1.11.0 TF version test
       The definition of the schema.
       This should contain a string representing the full definition of the schema
       that is a valid schema definition of the type specified in type. Changes
