@@ -2077,7 +2077,7 @@ func (r Resource) ShouldDatasourceSetAnnotations() bool {
 // that should be marked as "Required".
 func (r Resource) DatasourceRequiredFields() []string {
 	requiredFields := []string{}
-	uriParts := strings.Split(r.SelfLink, "/")
+	uriParts := strings.Split(r.IdFormat, "/")
 
 	for _, part := range uriParts {
 		if strings.HasPrefix(part, "{{") && strings.HasSuffix(part, "}}") {
@@ -2094,7 +2094,7 @@ func (r Resource) DatasourceRequiredFields() []string {
 // that should be marked as "Optional".
 func (r Resource) DatasourceOptionalFields() []string {
 	optionalFields := []string{}
-	uriParts := strings.Split(r.SelfLink, "/")
+	uriParts := strings.Split(r.IdFormat, "/")
 
 	for _, part := range uriParts {
 		if strings.HasPrefix(part, "{{") && strings.HasSuffix(part, "}}") {
