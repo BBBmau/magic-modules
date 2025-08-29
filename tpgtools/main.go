@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"strings"
@@ -457,6 +458,12 @@ func generateResourceTestFile(res *Resource) {
 	if len(res.TestSamples()) < 1 {
 		return
 	}
+
+	if res.ProductName()[0] < 'a' || res.ProductName()[0] > 'e' {
+		log.Printf("Skipping test file for %s because it's not in the a-e range", res.ProductName())
+		return
+	}
+
 	// Generate resource file
 	tmplInput := ResourceInput{
 		Resource: *res,
