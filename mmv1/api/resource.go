@@ -668,7 +668,7 @@ func (r Resource) AllNestedProperties(props []*Type) []*Type {
 
 func (r Resource) IdentityProperties() []*Type {
 	props := make([]*Type, 0)
-	importFormat := r.ExtractIdentifiers(ImportIdFormats(r.ImportFormat, r.Identity, r.BaseUrl)[0])
+	importFormat := r.ExtractIdentifiers(ImportIdFormats(r.ImportFormat, nil, r.BaseUrl)[0])
 	optionalValues := map[string]bool{"project": false, "zone": false, "region": false}
 	for _, p := range r.AllProperties() {
 		if slices.Contains(importFormat, google.Underscore(p.Name)) {
