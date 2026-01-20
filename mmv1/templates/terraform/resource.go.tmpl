@@ -170,7 +170,7 @@ func Resource{{ $.ResourceName -}}() *schema.Resource {
             return map[string]*schema.Schema{
               {{- range $p := .IdentityProperties }}
               "{{ underscore $p.Name}}": {
-                Type:     schema.TypeString,
+                Type:     {{ $p.TFType $p.Type }},
                 {{- if or $p.Required $p.Output }}
                 RequiredForImport: true,
                 {{- else }}
