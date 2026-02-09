@@ -18,6 +18,7 @@ import (
 
 func testAccAccessContextManagerServicePerimeterDryRunIngressPolicy_basicTest(t *testing.T) {
 	org := envvar.GetTestOrgFromEnv(t)
+	acctest.SkipIfVcr(t)
 	//projects := acctest.BootstrapServicePerimeterProjects(t, 1)
 
 	// Bootstrap a service account to use as ingress from identity
