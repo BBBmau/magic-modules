@@ -113,6 +113,9 @@ func (t *Terraform) GenerateObject(object api.Resource, outputFolder, productPat
 			t.GenerateSingularDataSourceTests(object, *templateData, outputFolder)
 			// log.Printf("Generating %s metadata", object.Name)
 			t.GenerateResourceMetadata(object, *templateData, outputFolder)
+			if object.GenerateListResource {
+				t.GenerateListResource(object, *templateData, outputFolder, generateCode, generateDocs)
+			}
 		}
 	}
 
@@ -352,6 +355,16 @@ func (t *Terraform) GenerateIamPolicyLegacy(object api.Resource, templateData Te
 	if generateDocs {
 		t.GenerateIamDocumentation(object, templateData, outputFolder, generateCode, generateDocs)
 	}
+}
+
+func (t *Terraform) GenerateListResource(object api.Resource, templateData TemplateData, outputFolder string, generateCode, generateDocs bool) {
+	productName := t.Product.ApiName
+	targetFolder := path.Join(outputFolder, t.FolderName(), "services", productName)
+	if err := os.MkdirAll(targetFolder, os.ModePerm); err != nil {
+		log.Println(fmt.Errorf("error creating parent directory %v: %v", targetFolder, err))
+	}
+	targetFilePath := path.Join(targetFolder, fmt.Sprintf("resource_%s_generated_test.go", t.ResourceGoFilename(object)))
+	templateData.GenerateQueryTestFile(targetFilePath, object)
 }
 
 func (t *Terraform) GenerateIamPolicy(object api.Resource, templateData TemplateData, outputFolder string, generateCode, generateDocs bool) {

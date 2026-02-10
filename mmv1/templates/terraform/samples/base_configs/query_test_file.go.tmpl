@@ -1,0 +1,38 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
+{{$.CodeHeader TemplatePath}}
+
+{{ $config := $.FirstTestConfig }}
+{{ $sample := $config.Sample }}
+{{ $step := $config.Step }}
+func TestAcc{{ $.ResourceName }}QueryGenerated(t *testing.T) {
+	t.Parallel()
+
+	acctest.VcrTest(t, resource.TestCase{
+		Steps: []resource.TestStep{
+			{
+				Config: testAcc{{ $.ResourceName }}Query(context),
+			},
+			{
+				ResourceName:      "{{ $.TerraformName }}.foo",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Query: true,
+				QueryResultChecks: []querycheck.QueryResultCheck{
+					querycheck.ExpectLength("{{ $.TerraformName }}.{{ $e.PrimaryResourceId }}", 1),
+				},
+			},
+		},
+	})
+}
+
+func testAcc{{ $.ResourceName }}Query(context map[string]interface{}) string {
+	return acctest.Nprintf(`
+list "{{ $.TerraformName }}" "test" {
+    provider = {{ camelize $.ProductMetadata.Name "lower" }}
+}
+`, context)
+}

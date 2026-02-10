@@ -153,6 +153,8 @@ type Resource struct {
 	// resource-specific IAM Policy.
 	IamPolicy *resource.IamPolicy `yaml:"iam_policy,omitempty"`
 
+	GenerateListResource bool `yaml:"generate_list_resource,omitempty"`
+
 	// [Optional] If set to true, don't generate the resource itself; only
 	// generate the IAM policy.
 	// TODO rewrite: rename?
@@ -1787,6 +1789,17 @@ func (r Resource) IamImportParams() []string {
 	importFormat := r.IamImportFormatTemplate()
 
 	return r.ExtractIdentifiers(importFormat)
+}
+
+func (r Resource) ListUrlValuesForTest() []string {
+	re := regexp.MustCompile(`\{\{%?(\w+)\}\}`)
+	matches := re.FindStringSubmatch(r.BaseUrl)
+
+	var collectionValues []string
+	for _, match := range matches {
+		collectionValues = append(collectionValues, match)
+	}
+	return collectionValues
 }
 
 func (r Resource) IamImportQualifiersForTest() string {

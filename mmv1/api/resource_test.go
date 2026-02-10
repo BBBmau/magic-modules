@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -751,4 +752,19 @@ func TestResourceAddExtraFields(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestListUrlValuesForTest(t *testing.T) {
+	re := regexp.MustCompile(`\{\{(\w+)\}\}`)
+	allMatches := re.FindAllStringSubmatch("projects/{{project}}/resource/{{resource}}", -1)
+
+	if len(allMatches) != 2 {
+		t.Errorf("Expected 2 matches, got %d", len(allMatches))
+	}
+	if allMatches[0][1] != "project" {
+		t.Errorf("Expected project, got %s", allMatches[0][1])
+	}
+	if allMatches[1][1] != "resource" {
+		t.Errorf("Expected resource, got %s", allMatches[1][1])
+	}
 }
