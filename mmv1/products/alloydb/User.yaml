@@ -31,6 +31,16 @@ timeouts:
   update_minutes: 20
   delete_minutes: 20
 autogen_async: true
+generate_list_resource: true
+query:
+  - name: 'basic'
+    config:
+      cluster: 'alloydb-cluster'
+      filter: 'user_id = "user1"'
+  - name: 'filter_test'
+    config:
+      cluster: 'alloydb-cluster'
+      filter: 'user_id = "user2"'
 custom_code:
   custom_import: 'templates/terraform/custom_import/alloydb_user.go.tmpl'
 # Skipping the sweeper because instances will be deleted during cluster sweeps

@@ -219,6 +219,8 @@ type Resource struct {
 	// corresponding OiCS walkthroughs.
 	Examples []*resource.Examples `yaml:"examples,omitempty"`
 
+	Query []*Query `yaml:"query,omitempty"`
+
 	// Samples for generating tests and documentation
 	Samples []*resource.Sample `yaml:"samples,omitempty"`
 
@@ -371,6 +373,11 @@ type Resource struct {
 	// TGC
 	// ====================
 	TGCResource `yaml:",inline"`
+}
+
+type Query struct {
+	Name   string
+	Config map[string]string
 }
 
 type TestConfig struct {

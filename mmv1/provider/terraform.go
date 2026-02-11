@@ -358,12 +358,25 @@ func (t *Terraform) GenerateIamPolicyLegacy(object api.Resource, templateData Te
 }
 
 func (t *Terraform) GenerateListResource(object api.Resource, templateData TemplateData, outputFolder string, generateCode, generateDocs bool) {
+	eligibleExample := false
+	for _, example := range object.Examples {
+		if !example.ExcludeTest {
+			if object.ProductMetadata.VersionObjOrClosest(t.Product.Version.Name).CompareTo(object.ProductMetadata.VersionObjOrClosest(example.MinVersion)) >= 0 {
+				eligibleExample = true
+				break
+			}
+		}
+	}
+	if !eligibleExample {
+		return
+	}
+
 	productName := t.Product.ApiName
 	targetFolder := path.Join(outputFolder, t.FolderName(), "services", productName)
 	if err := os.MkdirAll(targetFolder, os.ModePerm); err != nil {
 		log.Println(fmt.Errorf("error creating parent directory %v: %v", targetFolder, err))
 	}
-	targetFilePath := path.Join(targetFolder, fmt.Sprintf("resource_%s_generated_test.go", t.ResourceGoFilename(object)))
+	targetFilePath := path.Join(targetFolder, fmt.Sprintf("resource_%s_generated_query_test.go", t.ResourceGoFilename(object)))
 	templateData.GenerateQueryTestFile(targetFilePath, object)
 }
 
