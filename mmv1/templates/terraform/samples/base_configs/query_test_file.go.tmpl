@@ -3,16 +3,68 @@
 
 {{$.CodeHeader TemplatePath}}
 
-{{ $config := $.FirstTestConfig }}
-{{ $sample := $config.Sample }}
-{{ $step := $config.Step }}
+package {{ lower $.ProductMetadata.Name }}_test
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+
+	"{{ $.ImportPath }}/acctest"
+	"{{ $.ImportPath }}/envvar"
+	"{{ $.ImportPath }}/tpgresource"
+)
+
+var (
+    _ = fmt.Sprintf
+    _ = strings.Trim
+    _ = envvar.TestEnvVar
+    _ = tpgresource.SetLabels
+)
+
+
+{{ $example := $.FirstTestExample }}
 func TestAcc{{ $.ResourceName }}QueryGenerated(t *testing.T) {
 	t.Parallel()
 
+	{{- if $example.BootstrapIam }}
+	acctest.BootstrapIamMembers(t, []acctest.IamMember{
+	{{- range $iam := $example.BootstrapIam }}
+		{
+			Member: "{{$iam.Member}}",
+			Role:   "{{$iam.Role}}",
+		},
+	{{- end}}
+	})
+	{{- end }}
+
+	context := map[string]interface{}{
+	{{- template "EnvVarContext" dict "TestEnvVars" $example.TestEnvVars "HasNewLine" false}}
+	{{- range $varKey, $varVal := $example.TestVarsOverrides }}
+		"{{$varKey}}": {{$varVal}},
+	{{- end }}
+		"random_suffix": acctest.RandString(t, 10),
+	}
+
 	acctest.VcrTest(t, resource.TestCase{
+        PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+        {{- if eq $.MinVersionObj.Name "beta" }}
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderBetaFactories(t),
+{{-  else }}
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(t),
+	{{- if $example.ExternalProviders }}
+		ExternalProviders: map[string]resource.ExternalProvider{
+		{{- range $provider := $example.ExternalProviders }}
+			"{{$provider}}": {},
+		{{- end }}
+		},
+	{{-  end }}
+{{-  end }}
 		Steps: []resource.TestStep{
 			{
-				Config: testAcc{{ $.ResourceName }}Query(context),
+				Config: testAcc{{ $example.TestSlug $.ProductMetadata.Name $.Name }}(context),
 			},
 			{
 				ResourceName:      "{{ $.TerraformName }}.foo",
@@ -21,18 +73,26 @@ func TestAcc{{ $.ResourceName }}QueryGenerated(t *testing.T) {
 			},
 			{
 				Query: true,
+                Config: testAcc{{ $example.TestSlug $.ProductMetadata.Name $.Name }}Query(context),
 				QueryResultChecks: []querycheck.QueryResultCheck{
-					querycheck.ExpectLength("{{ $.TerraformName }}.{{ $e.PrimaryResourceId }}", 1),
+					querycheck.ExpectLength("{{ $.TerraformName }}.{{ $example.PrimaryResourceId }}", 1),
 				},
 			},
 		},
 	})
 }
 
-func testAcc{{ $.ResourceName }}Query(context map[string]interface{}) string {
+func testAcc{{ $example.TestSlug $.ProductMetadata.Name $.Name }}Query(context map[string]interface{}) string {
 	return acctest.Nprintf(`
-list "{{ $.TerraformName }}" "test" {
-    provider = {{ camelize $.ProductMetadata.Name "lower" }}
+list "{{ $example.ResourceType $.TerraformName }}" "test" {
+    provider = {{ if eq $.MinVersionObj.Name "beta" }}google-beta{{ else }}google{{ end }}
+    config {
+        {{ range $varKey, $varVal := $example.Vars }}
+        {{- if existsInBaseUrl $.BaseUrl $varKey -}}
+        {{ $varKey }} = "{{- $varVal -}}"
+        {{- end -}}
+        {{ end }}
+    }
 }
 `, context)
 }

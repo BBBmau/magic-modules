@@ -31,6 +31,7 @@ timeouts:
   update_minutes: 20
   delete_minutes: 20
 autogen_async: true
+generate_list_resource: true
 custom_code:
   custom_import: 'templates/terraform/custom_import/alloydb_user.go.tmpl'
 # Skipping the sweeper because instances will be deleted during cluster sweeps
@@ -39,7 +40,7 @@ examples:
   - name: 'alloydb_user_builtin'
     primary_resource_id: 'user1'
     vars:
-      alloydb_cluster_name: 'alloydb-cluster'
+      cluster: 'alloydb-cluster'
       alloydb_cluster_pass: 'cluster_secret'
       alloydb_instance_name: 'alloydb-instance'
       alloydb_user_name: 'user1'
@@ -51,7 +52,7 @@ examples:
   - name: 'alloydb_user_builtin_test'
     primary_resource_id: 'user1'
     vars:
-      alloydb_cluster_name: 'alloydb-cluster'
+      cluster: 'alloydb-cluster'
       alloydb_cluster_pass: 'cluster_secret'
       alloydb_instance_name: 'alloydb-instance'
       alloydb_user_name: 'user1'
@@ -65,7 +66,7 @@ examples:
   - name: 'alloydb_user_iam'
     primary_resource_id: 'user2'
     vars:
-      alloydb_cluster_name: 'alloydb-cluster'
+      cluster: 'alloydb-cluster'
       alloydb_instance_name: 'alloydb-instance'
       alloydb_cluster_pass: 'cluster_secret'
       alloydb_user_name: 'user2@foo.com'

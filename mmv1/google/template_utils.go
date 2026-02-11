@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"text/template"
@@ -66,25 +67,26 @@ type functionsData struct {
 
 func (t functionsData) templateFunctions() template.FuncMap {
 	return template.FuncMap{
-		"title":          SpaceSeparatedTitle,
-		"replace":        strings.Replace,
-		"replaceAll":     strings.ReplaceAll,
-		"camelize":       Camelize,
-		"underscore":     Underscore,
-		"plural":         Plural,
-		"contains":       strings.Contains,
-		"join":           strings.Join,
-		"lower":          strings.ToLower,
-		"upper":          strings.ToUpper,
-		"hasSuffix":      strings.HasSuffix,
-		"dict":           wrapMultipleParams,
-		"format2regex":   Format2Regex,
-		"hasPrefix":      strings.HasPrefix,
-		"sub":            subtract,
-		"plus":           plus,
-		"firstSentence":  FirstSentence,
-		"trimTemplate":   t.trimTemplate,
-		"customTemplate": t.customTemplate,
+		"title":           SpaceSeparatedTitle,
+		"replace":         strings.Replace,
+		"replaceAll":      strings.ReplaceAll,
+		"camelize":        Camelize,
+		"underscore":      Underscore,
+		"plural":          Plural,
+		"contains":        strings.Contains,
+		"join":            strings.Join,
+		"lower":           strings.ToLower,
+		"upper":           strings.ToUpper,
+		"hasSuffix":       strings.HasSuffix,
+		"dict":            wrapMultipleParams,
+		"format2regex":    Format2Regex,
+		"hasPrefix":       strings.HasPrefix,
+		"sub":             subtract,
+		"plus":            plus,
+		"firstSentence":   FirstSentence,
+		"trimTemplate":    t.trimTemplate,
+		"customTemplate":  t.customTemplate,
+		"existsInBaseUrl": t.ExistsInBaseUrl,
 	}
 }
 
@@ -129,6 +131,22 @@ func (t *functionsData) trimTemplate(templatePath string, e any) (string, error)
 		rs = strings.TrimSuffix(rs, "\n")
 	}
 	return fmt.Sprintf("%s\n", rs), nil
+}
+
+func (t *functionsData) ExistsInBaseUrl(baseUrl string, key string) bool {
+	re := regexp.MustCompile(`\{\{%?(\w+)\}\}`)
+	matches := re.FindStringSubmatch(baseUrl)
+
+	var collectionValues []string
+	for _, match := range matches {
+		collectionValues = append(collectionValues, match)
+	}
+	for _, value := range collectionValues {
+		if value == key {
+			return true
+		}
+	}
+	return false
 }
 
 func (t functionsData) customTemplate(e any, templatePath string, appendNewline bool) (string, error) {
