@@ -342,7 +342,16 @@ func (p *FrameworkProvider) Configure(ctx context.Context, req provider.Configur
 
 	// This is how we make provider configuration info (configured clients, default project, etc) available to resources and data sources
 	// implemented using the plugin-framework. The resources' Configure functions receive this data in the ConfigureRequest argument.
-	meta := p.Primary.Meta().(*transport_tpg.Config)
+	primaryMeta := p.Primary.Meta()
+	if primaryMeta == nil {
+		resp.Diagnostics.AddError("Provider not configured", "SDK provider metadata is nil. Ensure the provider block is configured before using framework resources.")
+		return
+	}
+	meta, ok := primaryMeta.(*transport_tpg.Config)
+	if !ok {
+		resp.Diagnostics.AddError("Provider configuration error", "SDK provider metadata had unexpected type and could not be propagated to framework resources.")
+		return
+	}
 	resp.DataSourceData = meta
 	resp.ResourceData = meta
 	resp.EphemeralResourceData = meta
