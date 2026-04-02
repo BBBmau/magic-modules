@@ -23,8 +23,8 @@ func NewProjectIamMemberListResource() list.ListResource {
 			tpgiamresource.IamWithBatching,
 			tpgiamresource.IamWithResourceIdentity(ProjectIamResourceIdentityParser),
 		),
-		IamProjectSchema,
 		NewProjectIamUpdater,
+		tpgiamresource.IamMemberListCallConfig{},
 	)
 }
 
