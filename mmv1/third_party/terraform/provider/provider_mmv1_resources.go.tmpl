@@ -2,6 +2,7 @@ package provider
 
 import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-framework/list"
 
 	{{- range $service := $.GetMmv1ServicesInVersion $.Products }}
 	  "github.com/hashicorp/terraform-provider-google/google/services/{{ $service }}"
@@ -559,6 +560,32 @@ var handwrittenIAMResources = map[string]*schema.Resource{
 	"google_service_account_iam_member":            tpgiamresource.ResourceIamMember(resourcemanager.IamServiceAccountSchema, resourcemanager.NewServiceAccountIamUpdater, resourcemanager.ServiceAccountIdParseFunc),
 	"google_service_account_iam_policy":            tpgiamresource.ResourceIamPolicy(resourcemanager.IamServiceAccountSchema, resourcemanager.NewServiceAccountIamUpdater, resourcemanager.ServiceAccountIdParseFunc),
 	// ####### END non-generated IAM resources ###########
+}
+
+// IamMemberListResources returns list.ListResource factories used by FrameworkProvider.
+// Factories are split as: handwritten IAM list resources first, then MMv1-generated ones.
+func IamMemberListResources() []func() list.ListResource {
+	out := iamMemberListResourcesHandwritten()
+	out = append(out, iamMemberListResourcesMMV1()...)
+	return out
+}
+
+func iamMemberListResourcesHandwritten() []func() list.ListResource {
+	// Handwritten IAM member list resources currently required by FrameworkProvider.
+	return []func() list.ListResource{
+		resourcemanager.NewFolderIamMemberListResource,
+		resourcemanager.NewProjectIamMemberListResource,
+	}
+}
+
+func iamMemberListResourcesMMV1() []func() list.ListResource {
+	return []func() list.ListResource{
+		{{- range $object := $.ResourcesForVersion }}
+		{{- if $object.IamMemberListFunc }}
+		{{ $object.IamMemberListImport }}.{{ $object.IamMemberListFunc }},
+		{{- end }}
+		{{- end }}
+	}
 }
 
 // UseGeneratedProducts uses every generated product to avoid "imported and not used" errors.

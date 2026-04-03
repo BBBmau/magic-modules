@@ -4,12 +4,29 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/terraform-plugin-framework/list"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-provider-google/google/tpgiamresource"
 	"github.com/hashicorp/terraform-provider-google/google/tpgresource"
 	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 	"google.golang.org/api/cloudresourcemanager/v1"
 )
+
+// NewProjectIamMemberListResource returns the list implementation for google_project_iam_member.
+func NewProjectIamMemberListResource() list.ListResource {
+	return tpgiamresource.NewIamMemberListResource(
+		"google_project_iam_member",
+		tpgiamresource.ResourceIamMember(
+			IamProjectSchema,
+			NewProjectIamUpdater,
+			ProjectIdParseFunc,
+			tpgiamresource.IamWithBatching,
+			tpgiamresource.IamWithResourceIdentity(ProjectIamResourceIdentityParser),
+		),
+		NewProjectIamUpdater,
+		tpgiamresource.IamMemberListCallConfig{},
+	)
+}
 
 var IamProjectSchema = map[string]*schema.Schema{
 	"project": {
