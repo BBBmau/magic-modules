@@ -107,8 +107,7 @@ func (listR *{{ $.ResourceName -}}ListResource) List(ctx context.Context, listRe
 				}
 
 				if !push(result) {
-					diags.AddError("stream closed", "stream closed")
-					break
+					return errors.New("stream closed")
 				}
 				return nil
 			},
