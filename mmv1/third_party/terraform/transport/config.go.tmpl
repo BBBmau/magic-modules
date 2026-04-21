@@ -31,7 +31,6 @@ import (
 
 	"github.com/hashicorp/terraform-provider-google/google/verify"
 
-	runadmin "cloud.google.com/go/run/apiv2"
 
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
@@ -745,17 +744,6 @@ func (c *Config) NewCloudRunV2Client(userAgent string) *runadminv2.Service {
 	clientRunAdminV2.BasePath = runAdminV2ClientBasePath
 
 	return clientRunAdminV2
-}
-
-func (c *Config) NewCloudRunServicesClient(userAgent string) *runadmin.ServicesClient {
-	runAdminClientBasePath := RemoveBasePathVersion(RemoveBasePathVersion(c.CloudRunV2BasePath))
-	log.Printf("[INFO] Instantiating Google Cloud Run Admin v2 client for path %s", runAdminClientBasePath)
-	clientRunAdminV1, err := runadmin.NewServicesClient(c.Context, option.WithHTTPClient(c.Client))
-	if err != nil {
-		log.Printf("[WARN] Error creating client run admin: %s", err)
-		return nil
-	}
-	return clientRunAdminV1
 }
 
 // StaticTokenSource is used to be able to identify static token sources without reflection.
