@@ -247,6 +247,11 @@ type Resource struct {
 
 	GenerateListResource bool `yaml:"generate_list_resource,omitempty"`
 
+	// ListResultDisplayNameKeys lists Terraform schema attribute names (snake_case), in priority order,
+	// passed to tpgresource.ListResourceMetadata.SetResult as displayNameKeys. Used when
+	// generate_list_resource is true. If empty, default is ["name"] when a root "name" property exists.
+	ListResultDisplayNameKeys []string `yaml:"list_result_display_name_keys,omitempty"`
+
 	// If true, skip sweeper generation for this resource
 	ExcludeSweeper bool `yaml:"exclude_sweeper,omitempty"`
 
@@ -734,6 +739,21 @@ func (r Resource) ListResultDisplayNameKeyStrings() []string {
 		keys = append(keys, markers[len(markers)-1][1])
 	}
 	return keys
+}
+
+// ListResultDisplayNameKeyStrings returns Terraform attribute names for list result DisplayName
+// (SetResult variadic args). YAML list_result_display_name_keys overrides; otherwise ["name"]
+// when a root user property "name" exists.
+func (r Resource) ListResultDisplayNameKeyStrings() []string {
+	if len(r.ListResultDisplayNameKeys) > 0 {
+		return r.ListResultDisplayNameKeys
+	}
+	for _, p := range r.RootProperties() {
+		if p.Name == "name" {
+			return []string{"name"}
+		}
+	}
+	return nil
 }
 
 func (r Resource) SensitiveProps() []*Type {
