@@ -55,6 +55,14 @@ func TestAcc{{ $.ResourceName }}ListQuery_generated(t *testing.T) {
 		"zone": envvar.GetTestZoneFromEnv(),
 		{{- end }}
 	{{- end }}
+	{{- range $scope := $.ListScopeProperties }}
+		{{- $n := underscore $scope.Name }}
+		{{- if or (eq $n "region") (eq $n "location") }}
+		"{{$n}}": envvar.GetTestRegionFromEnv(),
+		{{- else if eq $n "zone" }}
+		"zone": envvar.GetTestZoneFromEnv(),
+		{{- end }}
+	{{- end }}
 		"random_suffix": randomSuffix,
 	}
 
