@@ -113,6 +113,9 @@ func (t *Terraform) GenerateObject(object api.Resource, outputFolder, productPat
 			t.GenerateSingularDataSourceTests(object, *templateData, outputFolder)
 			// log.Printf("Generating %s metadata", object.Name)
 			t.GenerateResourceMetadata(object, *templateData, outputFolder)
+			if object.GenerateListResource {
+				t.GenerateListResourceQueryTest(object, *templateData, outputFolder)
+			}
 		}
 	}
 
@@ -150,6 +153,19 @@ func (t *Terraform) GenerateResource(object api.Resource, templateData TemplateD
 		} else {
 			targetFilePath := path.Join(targetFolder, fmt.Sprintf("resource_%s.go", t.ResourceGoFilename(object)))
 			templateData.GenerateResourceFile(targetFilePath, object)
+		}
+		if object.GenerateListResource {
+			if object.ExcludeIdentityGeneration {
+				log.Fatalf("generate_list_resource requires identity support; remove exclude_identity_generation from resource %q or disable generate_list_resource", object.Name)
+			}
+			if object.ExcludeRead {
+				log.Fatalf("generate_list_resource requires read support; remove exclude_read from resource %q or disable generate_list_resource", object.Name)
+			}
+			targetFilePath := path.Join(targetFolder, fmt.Sprintf("list_%s.go", t.ResourceGoFilename(object)))
+			templateData.GenerateFile(targetFilePath, "templates/terraform/list_resource.go.tmpl", object, true,
+				"templates/terraform/list_resource.go.tmpl",
+				"templates/terraform/list_resource_method.go.tmpl",
+			)
 		}
 	}
 
@@ -252,6 +268,36 @@ func (t *Terraform) GenerateResourceTests(object api.Resource, templateData Temp
 	}
 	targetFilePath := path.Join(targetFolder, fmt.Sprintf("resource_%s_generated_test.go", t.ResourceGoFilename(object)))
 	templateData.GenerateTestFile(targetFilePath, object)
+}
+
+func (t *Terraform) GenerateListResourceQueryTest(object api.Resource, templateData TemplateData, outputFolder string) {
+	if object.Samples != nil && object.Examples != nil {
+		log.Fatalf("Both Samples and Examples block exist in %v", object.Name)
+	}
+	if object.Examples == nil {
+		return
+	}
+
+	eligibleExample := false
+	for _, example := range object.Examples {
+		if !example.ExcludeTest {
+			if object.ProductMetadata.VersionObjOrClosest(t.Product.Version.Name).CompareTo(object.ProductMetadata.VersionObjOrClosest(example.MinVersion)) >= 0 {
+				eligibleExample = true
+				break
+			}
+		}
+	}
+	if !eligibleExample {
+		return
+	}
+
+	productName := t.Product.ApiName
+	targetFolder := path.Join(outputFolder, t.FolderName(), "services", productName)
+	if err := os.MkdirAll(targetFolder, os.ModePerm); err != nil {
+		log.Println(fmt.Errorf("error creating parent directory %v: %v", targetFolder, err))
+	}
+	targetFilePath := path.Join(targetFolder, fmt.Sprintf("list_%s_generated_test.go", t.ResourceGoFilename(object)))
+	templateData.GenerateQueryTestFile(targetFilePath, object)
 }
 
 func (t *Terraform) GenerateResourceSweeper(object api.Resource, templateData TemplateData, outputFolder string) {
@@ -1091,4 +1137,48 @@ type ProviderWithProducts struct {
 	Terraform
 	Compiler string
 	Products []*api.Product
+}
+
+// GeneratedListResourceRegistration describes one MMv1-generated list resource constructor
+// for framework_provider_mmv1_resources.go.tmpl.
+type GeneratedListResourceRegistration struct {
+	Package string // Go service package name (product ApiName), e.g. "cloudrun"
+	NewFunc string // e.g. "NewCloudRunServiceListResource"
+}
+
+func (t Terraform) GetGeneratedListResourcesInVersion(products []*api.Product) []GeneratedListResourceRegistration {
+	var out []GeneratedListResourceRegistration
+	for _, productDefinition := range products {
+		for _, object := range productDefinition.Objects {
+			if object.NotInVersion(productDefinition.VersionObjOrClosest(t.TargetVersionName)) || object.IsExcluded() || !object.GenerateListResource {
+				continue
+			}
+			out = append(out, GeneratedListResourceRegistration{
+				Package: productDefinition.ApiName,
+				NewFunc: fmt.Sprintf("New%sListResource", object.ResourceName()),
+			})
+		}
+	}
+	slices.SortFunc(out, func(a, b GeneratedListResourceRegistration) int {
+		if c := strings.Compare(a.Package, b.Package); c != 0 {
+			return c
+		}
+		return strings.Compare(a.NewFunc, b.NewFunc)
+	})
+	return out
+}
+
+func (t Terraform) GetListResourceImportPackages(products []*api.Product) []string {
+	reg := t.GetGeneratedListResourcesInVersion(products)
+	seen := make(map[string]struct{}, len(reg))
+	var pkgs []string
+	for _, r := range reg {
+		if _, ok := seen[r.Package]; ok {
+			continue
+		}
+		seen[r.Package] = struct{}{}
+		pkgs = append(pkgs, r.Package)
+	}
+	slices.Sort(pkgs)
+	return pkgs
 }
