@@ -1,4 +1,3 @@
-
 package acctest
 
 import (
@@ -223,6 +222,47 @@ provider "echo" {
 resource "echo" "test" {}
 `, ephemeralReference)
 }
+
+// utilities for generated list resource tests
+
+// CapturedDisplayName captures a resource's display-name attribute during a
+// create step and exposes a knownvalue.Check that asserts list-query results
+// match the captured value.
+type ListDisplayName struct {
+	value string
+}
+
+// Capture sets the value from the resource state for the given address and attribute candidates.
+func (c *ListDisplayName) Capture(resourceAddr string, attrCandidates []string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceAddr]
+		if !ok {
+			return fmt.Errorf("resource not found in state: %s", resourceAddr)
+		}
+		for _, k := range attrCandidates {
+			if v, ok := rs.Primary.Attributes[k]; ok && v != "" {
+				c.value = v
+				return nil
+			}
+		}
+		return fmt.Errorf("no display name attribute found in state for resource %s; tried %v", resourceAddr, attrCandidates)
+	}
+}
+
+// KnownValueCheck returns a knownvalue.Check that compares against the captured value.
+// Fails if Capture has not run yet.
+func (c *ListDisplayName) KnownValueCheck() knownvalue.Check {
+	return knownvalue.StringFunc(func(v string) error {
+		if c.value == "" {
+			return fmt.Errorf("display name was not captured from create step")
+		}
+		if v != c.value {
+			return fmt.Errorf("expected display name %q, got %q", c.value, v)
+		}
+		return nil
+	})
+}
+
 
 // This is a Printf sibling (Nprintf; Named Printf), which handles strings like
 // Nprintf("Hello %{target}!", map[string]interface{}{"target":"world"}) == "Hello world!".

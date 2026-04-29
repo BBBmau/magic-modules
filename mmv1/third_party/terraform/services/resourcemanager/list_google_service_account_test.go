@@ -21,7 +21,7 @@ func TestAccServiceAccountListResource_queryIdentity(t *testing.T) {
 
 	accountId := "a" + acctest.RandString(t, 10)
 	project := envvar.GetTestProjectFromEnv()
-	expectedEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", accountId, project)
+	captureCheck, knownValueCheck := acctest.NewDisplayNameChecks("google_service_account.acceptance", []string{"email"})
 
 	acctest.VcrTest(t, resource.TestCase{
 		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
@@ -33,7 +33,7 @@ func TestAccServiceAccountListResource_queryIdentity(t *testing.T) {
 			{
 				Config: testAccServiceAccountBasic(accountId, "Terraform List Test", "list resource query test"),
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("google_service_account.acceptance", "email", expectedEmail),
+					captureCheck,
 					resource.TestCheckResourceAttr("google_service_account.acceptance", "project", project),
 				),
 			},
@@ -42,7 +42,7 @@ func TestAccServiceAccountListResource_queryIdentity(t *testing.T) {
 				Config: testAccServiceAccountListQuery(project),
 				QueryResultChecks: []querycheck.QueryResultCheck{
 					querycheck.ExpectIdentity("google_service_account.all_in_project", map[string]knownvalue.Check{
-						"email":   knownvalue.StringExact(expectedEmail),
+						"email":   knownValueCheck,
 						"project": knownvalue.StringExact(project),
 					}),
 					querycheck.ExpectLengthAtLeast("google_service_account.all_in_project", 1),
