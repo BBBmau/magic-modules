@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/querycheck"
+	"github.com/hashicorp/terraform-plugin-testing/querycheck/queryfilter"
 	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 
 	"github.com/hashicorp/terraform-provider-google/google/acctest"
@@ -21,7 +22,8 @@ func TestAccServiceAccountListResource_queryIdentity(t *testing.T) {
 
 	accountId := "a" + acctest.RandString(t, 10)
 	project := envvar.GetTestProjectFromEnv()
-	captureCheck, knownValueCheck := acctest.NewDisplayNameChecks("google_service_account.acceptance", []string{"email"})
+	expectedEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", accountId, project)
+	listDisplayName := &acctest.ListDisplayName{}
 
 	acctest.VcrTest(t, resource.TestCase{
 		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
@@ -33,7 +35,7 @@ func TestAccServiceAccountListResource_queryIdentity(t *testing.T) {
 			{
 				Config: testAccServiceAccountBasic(accountId, "Terraform List Test", "list resource query test"),
 				Check: resource.ComposeTestCheckFunc(
-					captureCheck,
+					listDisplayName.Capture("google_service_account.acceptance", []string{"email"}),
 					resource.TestCheckResourceAttr("google_service_account.acceptance", "project", project),
 				),
 			},
@@ -42,16 +44,20 @@ func TestAccServiceAccountListResource_queryIdentity(t *testing.T) {
 				Config: testAccServiceAccountListQuery(project),
 				QueryResultChecks: []querycheck.QueryResultCheck{
 					querycheck.ExpectIdentity("google_service_account.all_in_project", map[string]knownvalue.Check{
-						"email":   knownValueCheck,
+						"email":   knownvalue.StringExact(expectedEmail),
 						"project": knownvalue.StringExact(project),
 					}),
 					querycheck.ExpectLengthAtLeast("google_service_account.all_in_project", 1),
+					querycheck.ExpectResourceDisplayName(
+						"google_service_account.all_in_project",
+						queryfilter.ByDisplayName(listDisplayName.KnownValueCheck()),
+						listDisplayName.KnownValueCheck(),
+					),
 				},
 			},
 		},
 	})
 }
-
 func testAccServiceAccountListQuery(project string) string {
 	return fmt.Sprintf(`
 provider "google" {}
