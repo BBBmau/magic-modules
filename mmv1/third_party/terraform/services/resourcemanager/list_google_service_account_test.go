@@ -7,7 +7,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/querycheck"
-	"github.com/hashicorp/terraform-plugin-testing/querycheck/queryfilter"
 	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 
 	"github.com/hashicorp/terraform-provider-google/google/acctest"
@@ -48,16 +47,13 @@ func TestAccServiceAccountListResource_queryIdentity(t *testing.T) {
 						"project": knownvalue.StringExact(project),
 					}),
 					querycheck.ExpectLengthAtLeast("google_service_account.all_in_project", 1),
-					querycheck.ExpectResourceDisplayName(
-						"google_service_account.all_in_project",
-						queryfilter.ByDisplayName(listDisplayName.KnownValueCheck()),
-						listDisplayName.KnownValueCheck(),
-					),
+					listDisplayName.Check("google_service_account.all_in_project"),
 				},
 			},
 		},
 	})
 }
+
 func testAccServiceAccountListQuery(project string) string {
 	return fmt.Sprintf(`
 provider "google" {}

@@ -19,6 +19,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-mux/tf5muxserver"
 	"github.com/hashicorp/terraform-plugin-testing/echoprovider"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/querycheck"
+	"github.com/hashicorp/terraform-plugin-testing/querycheck/queryfilter"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-provider-google/google/envvar"
 	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
@@ -223,13 +227,14 @@ resource "echo" "test" {}
 `, ephemeralReference)
 }
 
+
 // utilities for generated list resource tests
 
-// CapturedDisplayName captures a resource's display-name attribute during a
-// create step and exposes a knownvalue.Check that asserts list-query results
-// match the captured value.
+// ListDisplayName captures a resource's display-name attribute during a create step
+// and provides a helper for ergonomic query display name checks.
 type ListDisplayName struct {
 	value string
+	attr  string
 }
 
 // Capture sets the value from the resource state for the given address and attribute candidates.
@@ -242,6 +247,7 @@ func (c *ListDisplayName) Capture(resourceAddr string, attrCandidates []string) 
 		for _, k := range attrCandidates {
 			if v, ok := rs.Primary.Attributes[k]; ok && v != "" {
 				c.value = v
+				c.attr = k
 				return nil
 			}
 		}
@@ -249,20 +255,20 @@ func (c *ListDisplayName) Capture(resourceAddr string, attrCandidates []string) 
 	}
 }
 
-// KnownValueCheck returns a knownvalue.Check that compares against the captured value.
-// Fails if Capture has not run yet.
-func (c *ListDisplayName) KnownValueCheck() knownvalue.Check {
-	return knownvalue.StringFunc(func(v string) error {
-		if c.value == "" {
-			return fmt.Errorf("display name was not captured from create step")
-		}
-		if v != c.value {
-			return fmt.Errorf("expected display name %q, got %q", c.value, v)
-		}
-		return nil
-	})
+// Check returns a querycheck.QueryResultCheck using ExpectResourceDisplayName and queryfilter.ByDisplayName.
+// Example usage: listDisplayName.Check("google_service_account.all_in_project")
+func (c *ListDisplayName) Check(resourceAddr string) querycheck.QueryResultCheck {
+	return querycheck.ExpectResourceDisplayName(
+		resourceAddr,
+		queryfilter.ByDisplayName(c.KnownValueCheck()),
+		c.KnownValueCheck(),
+	)
 }
 
+// KnownValueCheck returns a knownvalue.Check for the captured value.
+func (c *ListDisplayName) KnownValueCheck() knownvalue.Check {
+	return knownvalue.StringExact(c.value)
+}
 
 // This is a Printf sibling (Nprintf; Named Printf), which handles strings like
 // Nprintf("Hello %{target}!", map[string]interface{}{"target":"world"}) == "Hello world!".
