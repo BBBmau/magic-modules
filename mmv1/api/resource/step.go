@@ -122,46 +122,13 @@ func (s *Step) TestStepSlug(productName, resourceName string) string {
 	return ret
 }
 
-// ResolveScopeVarKey returns the Nprintf context key that supplies the value
-// for a list-query scope (e.g. "bucket"). It checks the step's vars,
-// resource_id_vars, test_env_vars, and test_vars_overrides for a key whose
-// underscore-separated tokens end with one of: [scope], [scope,"name"], or
-// [scope,"id"]. Returns scopeName unchanged when nothing matches.
 func (s *Step) ResolveScopeVarKey(scopeName string) string {
-	sources := []map[string]string{s.Vars, s.ResourceIdVars, s.TestEnvVars, s.TestVarsOverrides}
-	has := func(k string) bool {
-		for _, m := range sources {
-			if _, ok := m[k]; ok {
-				return true
-			}
-		}
-		return false
-	}
-	endsWith := func(tokens, suffix []string) bool {
-		if len(tokens) < len(suffix) {
-			return false
-		}
-		off := len(tokens) - len(suffix)
-		for i, sfx := range suffix {
-			if tokens[off+i] != sfx {
-				return false
-			}
-		}
-		return true
-	}
-
-	suffixes := [][]string{{scopeName}, {scopeName, "name"}, {scopeName, "id"}}
-	// Prefer canonical exact-name matches before falling back to suffix scan.
-	for _, suf := range suffixes {
-		if k := strings.Join(suf, "_"); has(k) {
-			return k
-		}
-	}
-	for _, suf := range suffixes {
-		for _, m := range sources {
-			for k := range m {
-				if endsWith(strings.Split(k, "_"), suf) {
-					return k
+	candidates := []string{scopeName, scopeName + "_name", scopeName + "_id"}
+	for _, cand := range candidates {
+		for _, m := range []map[string]string{s.ResourceIdVars, s.TestEnvVars} {
+			for varVal := range m {
+				if varVal == cand || strings.HasSuffix(varVal, "_"+cand) {
+					return varVal
 				}
 			}
 		}
