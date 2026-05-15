@@ -122,20 +122,6 @@ func (s *Step) TestStepSlug(productName, resourceName string) string {
 	return ret
 }
 
-func (s *Step) ResolveScopeVarKey(scopeName string) string {
-	candidates := []string{scopeName, scopeName + "_name", scopeName + "_id"}
-	for _, cand := range candidates {
-		for _, m := range []map[string]string{s.ResourceIdVars, s.TestEnvVars} {
-			for varVal := range m {
-				if varVal == cand || strings.HasSuffix(varVal, "_"+cand) {
-					return varVal
-				}
-			}
-		}
-	}
-	return scopeName
-}
-
 func (s *Step) Validate(rName, sName string) (es []error) {
 	for k := range s.Vars {
 		if _, exists := s.ResourceIdVars[k]; exists {
