@@ -24,6 +24,7 @@
 
 package {{ $.Res.PackageName }}_test
 
+{{if or (gt (len $.Res.TestSamples) 0) (not $.Res.ExcludeDelete) -}}
 import (
 	"fmt"
 	"log"
@@ -41,11 +42,8 @@ import (
 	"{{ $.ImportPath }}/acctest"
 	"{{ $.ImportPath  }}/envvar"
 	"{{ $.ImportPath  }}/services/{{ lower $.Res.ProductMetadata.Name }}"
-{{ range $s := $.Res.TestSamples }}
-  {{- if $s.BootstrapIam }}
-    "{{ $.ImportPath  }}/services/resourcemanager"
-    {{ break }}
-  {{- end }}
+{{- range $service, $alias := $.Res.TestServiceDependencies }}
+	{{ $alias }} "{{ $.ImportPath  }}/services/{{ $service }}"
 {{- end }}
 	"{{ $.ImportPath  }}/tpgresource"
 	transport_tpg "{{ $.ImportPath  }}/transport"
@@ -236,4 +234,5 @@ func testAccCheck{{ $.Res.ResourceName }}DestroyProducer(t *testing.T) func(s *t
 		return nil
 	}
 }
+{{- end }}
 {{- end }}
