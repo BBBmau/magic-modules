@@ -64,10 +64,15 @@ Each entry has `status` (`SUCCESS`/`FAILURE`) and `build.number` /
 Buckets:
 | Bucket | Rule | Action |
 | --- | --- | --- |
-| **NEW** (regression) | `streak ≥ 2`, previously healthy (`pre_rate ≤ 0.20`, `≥5` prior builds) | **Investigate first** — likely caused by the pinned commit |
+| **NEW** (regression) | recent streak `2–6`, previously healthy (`pre_rate ≤ 0.20`, `≥5` prior builds) | **Investigate first** — likely caused by the pinned commit |
 | **WATCH** | `streak == 1` on a healthy test (`[1/40] F...........`) | Ambiguous (fresh regression *or* first flake). Re-check next nightly or do an isolated re-run before investing |
 | **CHRONIC** | `rate ≥ 0.50`, or `streak ≥ 4` with `rate ≥ 0.30` | Worth fixing — hand to the fix runbook (its ≥50% gate) |
 | **FLAKY** | intermittent, low rate, no clean streak | **Skip** |
+
+> **Cap the NEW streak.** A test failing the last *15–30* builds straight is no
+> longer "new" — it's an old regression that became chronic; the `≤ 6` upper
+> bound keeps NEW limited to *recent* breaks and lets long streaks fall through
+> to CHRONIC.
 
 ### High-confidence regression signal: same-service clusters
 If **several tests in the same service** flip to NEW in the same build (e.g. 5
@@ -128,7 +133,7 @@ def classify(h):
         streak+=1
     pre=h[streak:]
     pre_rate=(sum(1 for ok in pre if not ok)/len(pre)) if pre else 1.0
-    if streak>=2 and len(pre)>=5 and pre_rate<=0.20: return "NEW"
+    if 2<=streak<=6 and len(pre)>=5 and pre_rate<=0.20: return "NEW"
     if streak==1 and len(pre)>=5 and pre_rate<=0.20: return "WATCH"
     if rate>=0.50: return "CHRONIC"
     if streak>=4 and rate>=0.30: return "CHRONIC"
