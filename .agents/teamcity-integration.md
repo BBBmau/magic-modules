@@ -69,5 +69,8 @@ TESTS: 1 failed
 ✅ TeamCity successfully integrated — the agent has confirmed read access to
 nightly-test builds and per-test failure details for Google Beta.
 
-## Next (not yet started)
-- Experiment with a background agent that pulls failing tests and works on them.
+## Related workflows
+- **Triage / analysis** of the latest nightly batch (which tests to work on):
+  [`nightly-test-triage-workflow.md`](./nightly-test-triage-workflow.md)
+- **Fix** runbook (investigate → fix in MMv1 → validate on Upstream MM Testing):
+  [`nightly-test-agent-workflow.md`](./nightly-test-agent-workflow.md)

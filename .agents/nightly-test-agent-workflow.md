@@ -4,6 +4,11 @@ A repeatable process for an agent to triage and fix failing acceptance tests fro
 the Google Beta nightly suite. Prereq: TeamCity CLI integration verified — see
 [`teamcity-integration.md`](./teamcity-integration.md).
 
+> To **choose which** failing test(s) to work on, run the triage front-end first:
+> [`nightly-test-triage-workflow.md`](./nightly-test-triage-workflow.md). It scans
+> the latest nightly batch and surfaces new regressions + chronic failures (and
+> filters out flakes). This runbook covers what to do **once a target is picked**.
+
 ## Autonomy (run unattended)
 This workflow is long-running and involves many shell/git/`gh`/`teamcity` calls plus
 long TeamCity polls. The agent should run **without per-action approval prompts** so a
