@@ -204,3 +204,10 @@ gh pr comment <PR_NUMBER> \
 * **Never edit the generator** (`mmv1/api/`, `mmv1/provider/`, `mmv1/templates/terraform/list_resource*`) from this workflow. If the generator misbehaves, stop and escalate to the user.
 * **Never commit downstream provider files** to the magic-modules branch.
 * On any failure during generate/build, abort and report the exact failing command and output. On test failures, drop the failing resource(s) from the PR (or abort) per the user's choice — never ship a PR with failing list-query tests.
+
+## Next Step
+
+After the coder agent's YAML edits and generation are complete, hand off to the
+`validate-list-resource` skill (`.agents/skills/workflows/validate-list-resource/SKILL.md`). That
+skill owns the test-pass gate, the PR creation against `BBBmau/magic-modules`, and writing the
+draft oracle entry to `.agents/knowledge/list-resource/list-resource-patterns.md`.

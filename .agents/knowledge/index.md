@@ -54,3 +54,4 @@ Read this index at decision points; open only the source the task needs. Format 
 ## Agent-only entries
 
 - **enums-vs-strings** — Model an API enum as Enum (strict, plan-time) or String (forward-compatible): the deliberate trade-off. — [field/enums-vs-strings.md](field/enums-vs-strings.md)
+- **list-resource-patterns** *(agent-generated, created on first run)* — Observed patterns, gotchas, and eligibility findings from completed add-list-resource runs. — [list-resource/list-resource-patterns.md](list-resource/list-resource-patterns.md)

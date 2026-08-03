@@ -1,0 +1,6 @@
+{
+  "name": "list-resource-coder",
+  "configPath": {
+    "relativePathToConfig": "config.yaml"
+  }
+}

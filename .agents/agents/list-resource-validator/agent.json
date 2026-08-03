@@ -1,0 +1,6 @@
+{
+  "name": "list-resource-validator",
+  "configPath": {
+    "relativePathToConfig": "config.yaml"
+  }
+}
