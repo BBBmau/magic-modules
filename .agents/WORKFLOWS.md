@@ -37,3 +37,5 @@ specific one.
 ## Subagents:
 
 *   **`test-fixer`** (`.agents/agents/test-fixer/`): Automates diagnosis, remediation in Magic Modules, provider generation, and re-testing for failing acceptance tests.
+*   **`list-resource-coder`** (`.agents/agents/list-resource-coder/`): Runs the eligibility scan, sets `generate_list_resource: true` on approved resources, and runs `make provider`. Used by the list-resource autonomous loop.
+*   **`list-resource-validator`** (`.agents/agents/list-resource-validator/`): Fetches the branch, runs all oracle checks, runs acceptance tests, drops hard-ineligible resources, opens the PR, and writes the oracle run log.
