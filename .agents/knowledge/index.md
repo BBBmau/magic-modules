@@ -60,3 +60,7 @@ Read this index at decision points; open only the source the task needs. Format 
 ### Bugs (`bug/`)
 
 *(No entries yet)*
+
+### List resources (`list-resource/`)
+
+- **list-resource-oracle** — Living catalog of every failure pattern, gotcha, and fix encountered during list-resource generation. Read before starting any list-resource task. — [knowledge/list-resource-oracle.md](list-resource-oracle.md)
