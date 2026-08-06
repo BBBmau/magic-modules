@@ -144,7 +144,7 @@ A resource is eligible when **the generated list-query test can run unattended**
 
 Required *body* fields (set at create time) do **not** affect list eligibility. Only path scope params on the list/collection URL matter.
 
-Run the eligibility scan across the whole product and produce a candidate list before editing any YAML.
+Run the eligibility scan across the whole product and produce a candidate list before editing any YAML. When proceeding, print the final opted-in resource names explicitly so downstream verification can match them to generated tests.
 
 ```bash
 python3 - "$PRODUCT" <<'PY'
@@ -296,6 +296,8 @@ go build ./...
 A compile error here that matches an oracle pattern must be fixed in the YAML (or via an oracle-branch
 template fix), not by editing the generated `.go` file directly.
 
+If **any** test fails, do not patch the generator or the YAML to suppress the failure. Report the failing resources to the user. The user decides whether to (a) drop those resources from this PR and re-generate, or (b) abort the PR entirely. Never silently ship a PR that has failing list-query tests. When reporting test results programmatically, return valid JSON only with no surrounding prose or markdown fences.
+
 ### 7. Commit only the YAML changes
 
 Stage only the files in `mmv1/products/<PRODUCT>/`. The downstream provider edits are throwaway
@@ -315,6 +317,48 @@ The Validator will independently fetch the branch, run all four oracle checks, a
 JSON verdict. If it returns `FAIL`, the feedback will include an oracle pattern ID (e.g. `P-04`) and
 the exact command output. Look up that pattern in `.agents/knowledge/list-resource-oracle.md`, apply
 the documented fix, and push an updated commit to the same branch.
+
+### 9. Open the PR and request review
+
+Write the PR body to `/tmp/pr_body.md`, create the PR, print the PR URL clearly, then ask
+`modular-magician` to reassign a reviewer.
+
+```markdown
+Adds list-resource generation for the following <product> resources:
+
+- `google_<product>_<resource_a>`
+- `google_<product>_<resource_b>`
+- ...
+
+```release-note:new-list-resource
+`google_<product>_<resource_a>`
+```
+
+```release-note:new-list-resource
+`google_<product>_<resource_b>`
+```
+
+<details><summary>Local test output</summary>
+
+```
+<paste trimmed `--- PASS: TestAcc...ListQuery_generated` lines and the final `PASS / ok` summary>
+```
+
+</details>
+```
+
+```bash
+gh pr create \
+  --repo GoogleCloudPlatform/magic-modules \
+  --base main \
+  --head "$(gh api user -q .login):$BRANCH" \
+  --title "<product>: add list resources" \
+  --body-file /tmp/pr_body.md
+
+gh pr comment <PR_NUMBER> \
+  --repo GoogleCloudPlatform/magic-modules \
+  --body "@modular-magician reassign-reviewer"
+```
 
 ## Handoff & Guardrails
 
