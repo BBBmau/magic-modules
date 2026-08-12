@@ -1,0 +1,5 @@
+{"id":"8b97d022-67a3-4b29-98ca-cda5270c4a1f","ts":"2026-08-06T22:36:28.131Z","path":"/workspace/magic-modules/mmv1/products/networkservices/AgentGateway.yaml","version":"1.0.0","taskID":"0185ebdc-a6f4-45a5-9d88-aa858210fb8c"}
+{"id":"13b1cf5d-3574-4c58-8a38-22fd2075c269","ts":"2026-08-06T22:36:36.265Z","path":"/workspace/magic-modules/mmv1/products/networkservices/AuthzExtension.yaml","version":"1.0.0","taskID":"0185ebdc-a6f4-45a5-9d88-aa858210fb8c"}
+{"id":"8b7aaede-019f-4330-8149-dab7d4d01d7f","ts":"2026-08-06T22:37:18.561Z","path":"/workspace/magic-modules/mmv1/products/networkservices/EdgeCacheService.yaml","version":"1.0.0","taskID":"0185ebdc-a6f4-45a5-9d88-aa858210fb8c"}
+{"id":"aa24474c-7ad0-44ff-a1c1-3ab1038891f0","ts":"2026-08-06T22:37:29.184Z","path":"/workspace/magic-modules/mmv1/products/networkservices/Mesh.yaml","version":"1.0.0","taskID":"0185ebdc-a6f4-45a5-9d88-aa858210fb8c"}
+{"id":"8e0c062f-806f-45ca-a4b0-bad31714c7cd","ts":"2026-08-06T22:37:42.887Z","path":"/workspace/magic-modules/mmv1/products/networkservices/MulticastConsumerAssociation.yaml","version":"1.0.0","taskID":"0185ebdc-a6f4-45a5-9d88-aa858210fb8c"}
