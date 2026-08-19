@@ -39,7 +39,41 @@ git branch -r | grep 'origin/add-.*-list-resources' | \
 python3 - <<'PY'
 import sys, glob, yaml, os, re, json, subprocess
 
+# project/region/zone/location are auto-injected into the query test context.
 AUTO_SCOPES = {"project", "region", "zone", "location"}
+# org/folder/billing scopes require GOOGLE_ORG-style credentials the query test lacks (oracle P-14).
+ORG_SCOPES = {"organization", "org", "org_id", "organization_id",
+              "folder", "folder_id", "billing_account"}
+
+def _underscore(s):
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', s).lower()
+
+def _required_scope_props(d):
+    """underscore-name -> required(bool) for top-level properties and url params.
+    ListScopeProperties matches scope tokens against these; listScope.Capture can only
+    populate a scope param that is a REQUIRED property (it reads the attribute from the
+    created resource's state). Optional scope params need default_value support (PR #18304)."""
+    props = {}
+    for key in ("properties", "parameters", "virtual_fields"):
+        for p in (d.get(key) or []):
+            if isinstance(p, dict) and p.get("name"):
+                props[_underscore(p["name"])] = bool(p.get("required"))
+    return props
+
+def scope_supported(d, scope_params):
+    """A scope param is supported today when it is an auto scope, or a REQUIRED property
+    the generated test captures from state. Optional/org/missing scopes are not ready."""
+    props = _required_scope_props(d)
+    for s in scope_params:
+        if s in AUTO_SCOPES:
+            continue
+        if s in ORG_SCOPES:          # oracle P-14 — needs org credentials
+            return False
+        if s not in props:           # scope param is not a settable property
+            return False
+        if not props[s]:             # optional scope param — needs PR #18304 first
+            return False
+    return True
 
 def eligible_count(product):
     count = 0
@@ -64,8 +98,8 @@ def eligible_count(product):
         if ex[0].get("exclude_test"):
             continue
         list_url = d.get("base_url") or ""
-        bad = [s for s in re.findall(r"{{\s*(\w+)\s*}}", list_url) if s not in AUTO_SCOPES]
-        if bad:
+        scope_params = re.findall(r"{{\s*(\w+)\s*}}", list_url)
+        if not scope_supported(d, scope_params):
             continue
         count += 1
     return count
@@ -140,7 +174,7 @@ A resource is eligible when **the generated list-query test can run unattended**
 
 1. The resource must not be excluded from identity or read generation (`exclude_identity_generation: true` or `exclude_read: true`) — the generator hard-fails on these. See oracle **P-10**.
 2. The first example must not have `exclude_test: true`, since the generated query test reuses its config.
-3. Every scope parameter in the list URL (path params other than `project`/`region`/`zone`/`location` — e.g. `disk`, `instance`, `parent`) needs special handling. See oracle **P-11**.
+3. Every scope parameter in the list URL (path params other than `project`/`region`/`zone`/`location` — e.g. `instance`, `dataset`, `firewall_policy`) must be a **required property** of the resource. `listScope.Capture` reads a required scope param from the created resource's state and injects it into the list query, so parent-scoped resources are eligible today (already-merged examples: `google_sql_database` on `{{instance}}`, `google_kms_crypto_key_version` on `{{crypto_key}}`, `google_discovery_engine_control` on `{{collection_id}}`/`{{engine_id}}`). See oracle **P-11**. A scope param that is **optional** needs `default_value` support first (PR #18304); one that is **org/folder/billing-scoped** hits **P-14**; one that is **not a property** cannot be populated at all.
 
 Required *body* fields (set at create time) do **not** affect list eligibility. Only path scope params on the list/collection URL matter.
 
@@ -150,7 +184,41 @@ Run the eligibility scan across the whole product and produce a candidate list b
 python3 - "$PRODUCT" <<'PY'
 import sys, glob, yaml, os, re
 product = sys.argv[1]
+# project/region/zone/location are auto-injected into the query test context.
 AUTO_SCOPES = {"project", "region", "zone", "location"}
+# org/folder/billing scopes need GOOGLE_ORG-style creds the query test lacks (oracle P-14).
+ORG_SCOPES = {"organization", "org", "org_id", "organization_id",
+              "folder", "folder_id", "billing_account"}
+
+def _underscore(s):
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', s).lower()
+
+def _scope_props(d):
+    props = {}
+    for key in ("properties", "parameters", "virtual_fields"):
+        for p in (d.get(key) or []):
+            if isinstance(p, dict) and p.get("name"):
+                props[_underscore(p["name"])] = bool(p.get("required"))
+    return props
+
+def classify_scope(d, scope_params):
+    """Return (ok, reason). A non-auto scope param is supported today only when it is a
+    REQUIRED property: listScope.Capture reads it from the created resource's state and
+    feeds it to the list query (see already-merged sql_database, kms_crypto_key_version,
+    discovery_engine_*). Optional scope params need PR #18304 (default_value); org/folder
+    scopes hit P-14; a scope param that is not a property cannot be populated at all."""
+    props = _scope_props(d)
+    for s in scope_params:
+        if s in AUTO_SCOPES:
+            continue
+        if s in ORG_SCOPES:
+            return False, f"org/folder/billing scope '{s}' needs GOOGLE_ORG (oracle P-14)"
+        if s not in props:
+            return False, f"scope param '{s}' is not a settable property (needs url-param/collection_url_key)"
+        if not props[s]:
+            return False, f"optional scope param '{s}' needs default_value support first (PR #18304)"
+    return True, ""
+
 candidates, skipped = [], []
 for f in sorted(glob.glob(f"mmv1/products/{product}/*.yaml")):
     if f.endswith("/product.yaml"):
@@ -176,9 +244,9 @@ for f in sorted(glob.glob(f"mmv1/products/{product}/*.yaml")):
         skipped.append((name, "first example has exclude_test")); continue
     list_url = d.get("base_url") or ""
     scope_params = re.findall(r"{{\s*(\w+)\s*}}", list_url)
-    bad_scope = [s for s in scope_params if s not in AUTO_SCOPES]
-    if bad_scope:
-        skipped.append((name, f"list URL has unsupported scope param(s): {bad_scope}")); continue
+    ok, reason = classify_scope(d, scope_params)
+    if not ok:
+        skipped.append((name, reason)); continue
     candidates.append((name, f))
 
 print("CANDIDATES:")
