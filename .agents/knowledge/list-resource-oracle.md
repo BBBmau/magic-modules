@@ -382,27 +382,42 @@ eligibility scan. This will break the build or produce a non-functional data sou
 
 ---
 
-### P-11 — Eligibility scan: non-standard scope params in list URL block generation
+### P-11 — Eligibility scan: non-standard scope params in list URL
 
 **Symptom:**
 A resource's `base_url` contains template params beyond `project`, `region`, `zone`, `location` — for
-example `{{disk}}`, `{{instance}}`, `{{parent}}`, `{{env_id}}`. The eligibility scan marks it as
-ineligible with `"list URL has unsupported scope param(s): ['disk']"`.
+example `{{instance}}`, `{{dataset}}`, `{{parent}}`, `{{env_id}}`. An over-broad eligibility scan marks
+it as ineligible with `"list URL has unsupported scope param(s): ['instance']"`.
 
-**Root cause:**
-The query test template only auto-injects `project`, `region`, `zone`, and `location` into the test
-context map. Resources whose list URL requires additional path parameters (parent resource IDs) cannot
-have their query test run unattended without extending the template to inject those values.
+**Root cause / corrected understanding:**
+`project`, `region`, `zone`, and `location` are auto-injected into the query test context. For **any
+other** scope param the outcome depends on whether it is a **required** property of the resource:
+
+- **Required non-standard scope param → SUPPORTED TODAY.** `ListScopeProperties()` picks it up, the
+  generated `List*s` reads it via `data.<Prop>.ValueString()`, and `listScope.Capture` reads the value
+  from the created resource's state and passes it to the list query as a config variable. Already-merged
+  proof: `google_sql_database` (`{{instance}}`), `google_kms_crypto_key_version` (`{{crypto_key}}`),
+  `google_bigquery_dataset_access` (`{{dataset_id}}`), `google_compute_network_firewall_policy_association`
+  (`{{firewall_policy}}`), `google_discovery_engine_control` (`{{collection_id}}`/`{{engine_id}}`). These
+  resources are eligible with just `generate_list_resource: true` (plus any `collection_url_key` fix).
+- **Optional non-standard scope param → needs PR #18304 first.** The scope property is generated as
+  `Optional`, `listScope.Capture` emits an empty map for it, and the query runs with an empty value and
+  fails. PR #18304 (`mmv1/list: Support default_value for optional list scope properties`) makes the
+  generated code and test fall back to the field's `default_value`. Defer these until #18304 merges.
+- **Org/folder/billing scope (`{{organization}}`, `{{folder}}`, `{{billing_account}}`) → see P-14.**
+  Needs `GOOGLE_ORG`-style credentials the query test does not have.
+- **Scope param that is not a property at all** (e.g. a plural mismatch like `{{rules}}`) → cannot be
+  populated; needs a `url_param_only` parameter and/or `collection_url_key` before it is eligible.
 
 **Fix:**
-Do not set `generate_list_resource: true` on these resources. If you want to make a resource with a
-non-standard scope param eligible, first extend the `AUTO_SCOPES` set and the query test template
-injection logic in an oracle PR, get that merged upstream, then include the resource in a subsequent
-list-resource batch.
+Set `generate_list_resource: true` when every non-standard scope param is a **required** property. If a
+scope param is optional, land PR #18304 first, then opt in. Do not extend `AUTO_SCOPES` to include
+required parent params as a workaround — they already work; the scan just needs to check required-ness
+(the `add_list_resource` skill scanner does this).
 
 **Do NOT:**
-Add the resource to the batch and hope the test passes. It will fail at test runtime with a missing
-context variable error.
+Add a resource whose scope param is optional (pre-#18304), org-scoped, or not a property, and hope the
+test passes. It will fail at test runtime with an empty/missing scope value.
 
 ---
 
