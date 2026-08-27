@@ -36,6 +36,7 @@ async:
   actions: [create, delete]
   result:
     resource_inside_response: false
+generate_list_resource: true
 samples:
   - name: network_connectivity_transport_basic
     primary_resource_id: primary

@@ -34,6 +34,7 @@ async:
   operation:
     base_url: '{{op_id}}'
 autogen_async: true
+generate_list_resource: true
 samples:
   - name: network_connectivity_multicloud_data_transfer_config_basic
     primary_resource_id: example

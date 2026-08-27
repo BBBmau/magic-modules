@@ -21,6 +21,7 @@ references:
 docs:
 base_url: projects/{{project}}/locations/global/policyBasedRoutes
 immutable: true
+generate_list_resource: true
 self_link: projects/{{project}}/locations/global/policyBasedRoutes/{{name}}
 create_url: projects/{{project}}/locations/global/policyBasedRoutes?policyBasedRouteId={{name}}
 timeouts:
