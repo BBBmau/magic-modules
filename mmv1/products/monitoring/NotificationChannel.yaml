@@ -50,6 +50,7 @@ timeouts:
 custom_diff:
   - sensitiveLabelCustomizeDiff
 mutex: stackdriver/notifications/{{project}}
+generate_list_resource: true
 error_retry_predicates:
   - transport_tpg.IsMonitoringConcurrentEditError
 include_in_tgc_next: true

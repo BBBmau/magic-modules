@@ -30,6 +30,7 @@ self_link: v3/{{name}}
 create_url: v3/projects/{{project}}/services?serviceId={{service_id}}
 update_mask: true
 update_verb: PATCH
+generate_list_resource: true
 legacy_name: google_monitoring_custom_service
 id_format: '{{name}}'
 import_format:

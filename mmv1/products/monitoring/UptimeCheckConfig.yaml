@@ -22,6 +22,7 @@ base_url: v3/projects/{{project}}/uptimeCheckConfigs
 self_link: v3/{{name}}
 update_mask: true
 update_verb: PATCH
+generate_list_resource: true
 id_format: '{{name}}'
 import_format:
   - '{{project}} {{name}}'

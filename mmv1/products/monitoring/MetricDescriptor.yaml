@@ -38,6 +38,7 @@ async:
   check_response_func_absence: transport_tpg.PollCheckForAbsence
   suppress_error: false
   target_occurrences: 20
+generate_list_resource: true
 error_retry_predicates:
   - transport_tpg.IsMonitoringConcurrentEditError
 custom_code:

@@ -17,6 +17,7 @@ base_url: 'v3/projects/{{project}}/snoozes'
 self_link: 'v3/{{name}}'
 update_verb: 'PATCH'
 update_mask: true
+generate_list_resource: true
 id_format: '{{name}}'
 import_format:
   - 'projects/{{project}}/snoozes/{{name}}'

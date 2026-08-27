@@ -34,6 +34,7 @@ timeouts:
   update_minutes: 20
   delete_minutes: 20
 mutex: stackdriver/groups/{{project}}
+generate_list_resource: true
 error_retry_predicates:
   - transport_tpg.IsMonitoringConcurrentEditError
 custom_code:
