@@ -108,6 +108,30 @@ func TestAccVertexAIModel_modelIdProvidedAtCreateTime(t *testing.T) {
 	})
 }
 
+func TestAccVertexAIModel_upload(t *testing.T) {
+	t.Parallel()
+
+	context := map[string]interface{}{
+		"project_name": envvar.GetTestProjectFromEnv(),
+	}
+
+	acctest.VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccCheckVertexAIModelDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccVertexAIModel_upload(context),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("google_vertex_ai_model.model", "display_name", "tf-upload-model"),
+					resource.TestCheckResourceAttr("google_vertex_ai_model.model", "artifact_uri", "gs://cloud-samples-data/vertex-ai/model-deployment/models/boston/model/"),
+					resource.TestCheckResourceAttr("google_vertex_ai_model.model", "container_spec.0.image_uri", "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-3:latest"),
+				),
+			},
+		},
+	})
+}
+
 func testAccVertexAIModel_modelIdProvided_create(context map[string]interface{}) string {
 	return acctest.Nprintf(`
 resource "google_vertex_ai_model" "model" {
@@ -131,6 +155,21 @@ resource "google_vertex_ai_model" "model" {
 
   description = "updated"
   display_name = "updated"
+}
+`, context)
+}
+
+func testAccVertexAIModel_upload(context map[string]interface{}) string {
+	return acctest.Nprintf(`
+resource "google_vertex_ai_model" "model" {
+  project = "%{project_name}"
+  region = "us-central1"
+  display_name = "tf-upload-model"
+
+  artifact_uri = "gs://cloud-samples-data/vertex-ai/model-deployment/models/boston/model/"
+  container_spec {
+    image_uri = "us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-3:latest"
+  }
 }
 `, context)
 }

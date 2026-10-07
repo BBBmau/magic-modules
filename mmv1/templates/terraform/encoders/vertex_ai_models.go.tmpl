@@ -1,1 +1,21 @@
+if _, ok := d.GetOk("source_model"); ok {
+	return obj, nil
+}
+
+model := make(map[string]interface{})
+for _, field := range []string{
+	"displayName",
+	"description",
+	"artifactUri",
+	"containerSpec",
+	"versionAliases",
+	"encryptionSpec",
+} {
+	if value, ok := obj[field]; ok {
+		model[field] = value
+		delete(obj, field)
+	}
+}
+obj["model"] = model
+
 return obj, nil
