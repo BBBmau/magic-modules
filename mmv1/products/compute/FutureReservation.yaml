@@ -73,15 +73,14 @@ samples:
       - name: 'future_reservation_aggregate_reservation'
         resource_id_vars:
           future_reservation_name: 'gce-future-reservation-aggregate-reservation'
+          reservation_name: 'gce-reservation-aggregate-reservation'
           start_time: '2025-11-01T00:00:00Z'
           end_time: '2025-11-02T00:00:00Z'
         test_vars_overrides:
-          start_time: 'time.Date(time.Now().Year(), 12, 31, 0, 0, 0, 0, time.Now().Location()).AddDate(0, 0, 1).Format(time.RFC3339)'
-          end_time: 'time.Date(time.Now().Year(), 12, 31, 0, 0, 0, 0, time.Now().Location()).AddDate(0, 0, 10).Format(time.RFC3339)'
+          start_time: 'time.Now().UTC().AddDate(0, 0, 7).Truncate(time.Hour).Format(time.RFC3339)'
+          end_time: 'time.Now().UTC().AddDate(0, 0, 9).Truncate(time.Hour).Format(time.RFC3339)'
         test_env_vars:
           project: 'PROJECT_NAME'
-          org_id: 'ORG_ID'
-          billing_account: 'BILLING_ACCT'
   - name: 'shared_future_reservation'
     primary_resource_id: 'gce_future_reservation'
     exclude_basic_doc: true

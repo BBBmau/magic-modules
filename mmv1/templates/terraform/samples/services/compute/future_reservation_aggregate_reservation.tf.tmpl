@@ -4,25 +4,22 @@ resource "google_compute_future_reservation" "{{$.PrimaryResourceId}}" {
   project  = "{{index $.TestEnvVars "project"}}"
   zone     = "us-central1-a"
   auto_delete_auto_created_reservations = true
-  planning_status = "DRAFT"
-  name_prefix = "fr-basic"
+  planning_status = "SUBMITTED"
+  reservation_mode = "CALENDAR"
+  reservation_name = "{{index $.ResourceIdVars "reservation_name"}}"
+  specific_reservation_required = true
   time_window {
     start_time = "{{ index $.ResourceIdVars "start_time" }}"
     end_time   = "{{ index $.ResourceIdVars "end_time" }}"
   }
+  share_settings {
+    share_type = "LOCAL"
+  }
   aggregate_reservation {
-    vm_family = "VM_FAMILY_CLOUD_TPU_DEVICE_CT3"
-    workload_type = "UNSPECIFIED"
+    vm_family = "VM_FAMILY_CLOUD_TPU_POD_SLICE_CT5P"
     reserved_resources {
       accelerator {
-        accelerator_count = 32
-        accelerator_type  = "projects/{{index $.TestEnvVars "project"}}/zones/us-central1-a/acceleratorTypes/ct3"
-      }
-    }
-    reserved_resources {
-      accelerator {
-        accelerator_count = 2
-        accelerator_type  = "projects/{{index $.TestEnvVars "project"}}/zones/us-central1-a/acceleratorTypes/ct3"
+        accelerator_count = 1
       }
     }
   }
