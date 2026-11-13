@@ -134,13 +134,9 @@ properties:
       that can be used for partition elimination to be specified.
     output: true
   - name: 'type'
-    type: Enum
+    type: String
     description: 'Describes the table type'
     output: true
-    enum_values:
-      - 'TABLE'
-      - 'VIEW'
-      - 'EXTERNAL'
   - name: 'view'
     type: NestedObject
     description: The view definition.
@@ -277,6 +273,19 @@ properties:
                 Definition of the foreign data type.
                 Only valid for top-level schema fields (not nested fields).
                 If the type is FOREIGN, this field is required.
+            - name: 'dataGovernanceTagsInfo'
+              type: NestedObject
+              description: |
+                Specifies the data governance tags on this field.
+              properties:
+                - name: 'dataGovernanceTags'
+                  type: KeyValuePairs
+                  description: |
+                    The tags attached to this field. Tag keys are globally unique.
+                    Tag key is expected to be in the namespaced format, for example
+                    "parent-id/pii" where "parent-id" is the ID of the parent
+                    organization or project resource for this tag key.
+                    Tag value is expected to be the short name, for example "sensitive".
   - name: 'schemaForeignTypeInfo'
     type: NestedObject
     description: |

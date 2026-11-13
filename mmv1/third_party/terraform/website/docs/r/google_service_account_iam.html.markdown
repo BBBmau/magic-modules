@@ -134,7 +134,9 @@ resource "google_service_account_iam_member" "admin-account-iam" {
 
 The following arguments are supported:
 
-* `service_account_id` - (Required) The fully-qualified name of the service account to apply policy to.
+* `service_account_id` - (Required) The fully-qualified name of the service account to apply policy to,
+  in the form `projects/{project}/serviceAccounts/{email}` or `projects/{project}/serviceAccounts/{unique_id}`.
+  Unlike an email, a unique ID never refers to a later account recreated with the same email.
 
 * `member/members` - (Required) Identities that will be granted the privilege in `role`.
   Each entry can have one of the following values:
@@ -179,6 +181,9 @@ exported:
 -> **Custom Roles** If you're importing a IAM resource with a custom role, make sure to use the
 full name of the custom role, e.g. `[projects/my-project|organizations/my-org]/roles/my-custom-role`.
 
+In the import IDs and resource identity below, `service_account_id` may also use the unique ID form. Use the same form as your configuration;
+changing `service_account_id` between forms replaces the resource.
+
 ### Importing IAM members
 
 IAM member imports use space-delimited identifiers that contains the `service_account_id`, `role`, and `member`. For example:
@@ -199,6 +204,28 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 ```
 $ terraform import google_service_account_iam_member.default "projects/{{project_id}}/serviceAccounts/{{service_account_email}} roles/editor user:foo@example.com"
 ```
+
+#### Import via resource identity
+
+`google_service_account_iam_member` also supports plannable import via [resource identity](https://developer.hashicorp.com/terraform/language/block/import#identity) (Terraform 1.12+):
+
+```tf
+import {
+  to = google_service_account_iam_member.default
+  identity = {
+    service_account_id = "projects/your-project-id/serviceAccounts/your-service-account@your-project-id.iam.gserviceaccount.com"
+    role               = "roles/editor"
+    member             = "user:foo@example.com"
+  }
+}
+```
+
+Identity attributes:
+
+* `service_account_id` - (Required) Fully-qualified service account resource name.
+* `role` - (Required) The IAM role being granted.
+* `member` - (Required) The identity that the role is granted to.
+* `condition_title` - (Optional) Title of the IAM condition, when importing a conditional binding.
 
 ### Importing IAM bindings
 

@@ -69,6 +69,12 @@ resource "google_organization_iam_member" "sa_cloudkms_admin" {
   member = google_service_account.sa.member
 }
 
+resource "google_organization_iam_member" "sa_cloudsupport_subscription_editor" {
+  org_id = data.google_organization.org.org_id
+  role   = "roles/cloudsupport.subscriptionEditor"
+  member = google_service_account.sa.member
+}
+
 resource "google_organization_iam_member" "sa_compute_xpn_admin" {
   org_id = data.google_organization.org.org_id
   role   = "roles/compute.xpnAdmin"
@@ -255,6 +261,7 @@ module "project-services" {
     "cloudtrace.googleapis.com",
     "composer.googleapis.com",
     "compute.googleapis.com",
+    "config.googleapis.com",
     "connectors.googleapis.com",
     "container.googleapis.com",
     "containeranalysis.googleapis.com",
@@ -444,6 +451,35 @@ resource "google_project_service_identity" "dlp_sa" {
 
   project = google_project.proj.project_id
   service = "dlp.googleapis.com"
+}
+
+resource "google_project_service_identity" "saasservicemgmt_sa" {
+  provider   = google-beta
+  depends_on = [module.project-services]
+
+  project = google_project.proj.project_id
+  service = "saasservicemgmt.googleapis.com"
+}
+
+resource "google_project_service_identity" "infra_manager_sa" {
+  provider   = google-beta
+  depends_on = [module.project-services]
+
+  project = google_project.proj.project_id
+  service = "config.googleapis.com"
+}
+
+# TestAccSaasRuntime*
+resource "google_project_iam_member" "saasservicemgmt_service_agent" {
+  project = google_project.proj.project_id
+  role    = "roles/saasservicemgmt.serviceAgent"
+  member  = "serviceAccount:service-${google_project.proj.number}@gcp-sa-saasservicemgmt.iam.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "infra_manager_service_agent" {
+  project = google_project.proj.project_id
+  role    = "roles/config.serviceAgent"
+  member  = "serviceAccount:service-${google_project.proj.number}@gcp-sa-config.iam.gserviceaccount.com"
 }
 
 # TestAccComposerEnvironment_fixPyPiPackages

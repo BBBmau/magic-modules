@@ -14,7 +14,7 @@ Manages a Cloud Dataproc cluster resource within GCP.
 
 
 !> **Warning:** Due to limitations of the API, all arguments except
-`labels`,`cluster_config.worker_config.num_instances` and `cluster_config.preemptible_worker_config.num_instances` are non-updatable. Changing `cluster_config.worker_config.min_num_instances` will be ignored. Changing others will cause recreation of the
+`labels`, `cluster_config.worker_config.num_instances`, `cluster_config.preemptible_worker_config.num_instances`, `cluster_config.worker_flexible_config.num_instances` and `cluster_config.secondary_worker_flexible_config.num_instances` are non-updatable. Changing `cluster_config.worker_config.min_num_instances` will be ignored. Changing others will cause recreation of the
 whole cluster!
 
 ## Example Usage - Basic
@@ -95,6 +95,40 @@ resource "google_dataproc_cluster" "mycluster" {
   }
 }
 ```
+
+## Example Usage - High Obtainability (HO) Mode
+
+```hcl
+resource "google_dataproc_cluster" "ho_cluster" {
+  name   = "my-ho-cluster"
+  region = "us-central1"
+
+  cluster_config {
+    master_flexible_config {
+      num_instances     = 1
+      core_count        = 4
+      hardware_class    = "STANDARD"
+      boot_disk_size_gb = 100
+    }
+
+    worker_flexible_config {
+      num_instances     = 2
+      core_count        = 8
+      hardware_class    = "STANDARD"
+      boot_disk_size_gb = 100
+    }
+
+    secondary_worker_flexible_config {
+      num_instances     = 2
+      core_count        = 8
+      hardware_class    = "PERFORMANCE"
+      boot_disk_size_gb = 100
+    }
+  }
+}
+```
+
+~> **Tip:** When an autoscaling policy is attached to an HO cluster, use `lifecycle { ignore_changes = [cluster_config[0].worker_flexible_config[0].num_instances, cluster_config[0].secondary_worker_flexible_config[0].num_instances] }` to avoid fighting the autoscaler.
 
 ## Example Usage - Using a GPU accelerator
 
@@ -325,17 +359,20 @@ resource "google_dataproc_cluster" "accelerated_cluster" {
 
 ```hcl
     cluster_config {
-        gce_cluster_config        { ... }
-        master_config             { ... }
-        worker_config             { ... }
-        preemptible_worker_config { ... }
-        software_config           { ... }
+        gce_cluster_config               { ... }
+        master_config                    { ... }
+        worker_config                    { ... }
+        preemptible_worker_config        { ... }
+        master_flexible_config           { ... }
+        worker_flexible_config           { ... }
+        secondary_worker_flexible_config { ... }
+        software_config                  { ... }
 
         # You can define multiple initialization_action blocks
-        initialization_action     { ... }
-        encryption_config         { ... }
-        endpoint_config           { ... }
-        metastore_config          { ... }
+        initialization_action            { ... }
+        encryption_config                { ... }
+        endpoint_config                  { ... }
+        metastore_config                 { ... }
     }
 ```
 
@@ -369,6 +406,20 @@ resource "google_dataproc_cluster" "accelerated_cluster" {
   * **NOTE** : `preemptible_worker_config` is
    an alias for the api's [secondaryWorkerConfig](https://cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig#InstanceGroupConfig). The name doesn't necessarily mean it is preemptible and is named as
    such for legacy/compatibility reasons.
+
+* `master_flexible_config` (Optional) The configuration for the master flexible instance group
+   in High Obtainability (HO) mode. Mutually exclusive with `master_config` and `gce_cluster_config.zone`.
+   Required whenever `worker_flexible_config` or `secondary_worker_flexible_config` is specified.
+   Structure [defined below](#nested_master_flexible_config).
+
+* `worker_flexible_config` (Optional) The configuration for the worker flexible instance group
+   in High Obtainability (HO) mode. Mutually exclusive with `worker_config` and `gce_cluster_config.zone`.
+   Requires `master_flexible_config`. Structure [defined below](#nested_worker_flexible_config).
+
+* `secondary_worker_flexible_config` (Optional) The configuration for the secondary worker flexible
+   instance group in High Obtainability (HO) mode. Mutually exclusive with `preemptible_worker_config` and
+   `gce_cluster_config.zone`. Requires `master_flexible_config`.
+   Structure [defined below](#nested_secondary_worker_flexible_config).
 
 * `software_config` (Optional) The config settings for software inside the cluster.
    Structure [defined below](#nested_software_config).
@@ -473,6 +524,9 @@ resource "google_dataproc_cluster" "accelerated_cluster" {
 
 * `shielded_instance_config` (Optional) Shielded Instance Config for clusters using [Compute Engine Shielded VMs](https://cloud.google.com/security/shielded-cloud/shielded-vm).
 
+* `multi_zone_config` - (Optional) Configuration for multi-zonal clusters that can create instances across multiple Zones within the Region.
+   Structure [defined below](#nested_multi_zone_config).
+
 - - -
 
 
@@ -498,6 +552,12 @@ cluster_config{
 
 - - -
 
+<a name="nested_multi_zone_config"></a>The `cluster_config.gce_cluster_config.multi_zone_config` block supports:
+
+* `target_shape` - (Required) The distribution shape of the nodes in the multi-zonal cluster. Valid values are `"ANY"`.
+
+- - -
+
 <a name="nested_master_config"></a>The `cluster_config.master_config` block supports:
 
 ```hcl
@@ -516,6 +576,14 @@ cluster_config {
       instance_selection_list {
         machine_types = ["n2-standard-2","n1-standard-2"]
         rank          = 1
+        disk_config {
+          boot_disk_size_gb = 30
+          boot_disk_type    = "pd-standard"
+          attached_disk_config {
+            disk_size_gb = 30
+            type         = "hyperdisk-balanced"
+          }
+        }
       }
       instance_selection_list {
         machine_types = ["n2d-standard-2"]
@@ -563,6 +631,13 @@ cluster_config {
 	Valid values: "scsi" (Small Computer System Interface), "nvme" (Non-Volatile
 	Memory Express). See
 	[local SSD performance](https://cloud.google.com/compute/docs/disks/local-ssd#performance).
+
+        * `attached_disk_config` - (Optional) Attached disk configuration.
+            * `disk_size_gb` - (Optional) Size of the attached disk, specified in GB.
+            * `disk_type` - (Optional, Deprecated) The disk type of the attached disk. Such as "pd-ssd" or "pd-standard". `disk_type` is deprecated and will be removed in a future major release. Use `type` instead.
+            * `type` - (Optional) The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".
+            * `provisioned_iops` - (Optional) Indicates how many IOPS to provision for the disk.
+            * `provisioned_throughput` - (Optional) Indicates how much throughput to provision for the disk.
 * `instance_flexibility_policy` (Optional) Instance flexibility Policy allowing a mixture of VM shapes.
 
     * `instance_selection_list` - (Optional) List of instance selection options that the group will use when creating new VMs.
@@ -577,6 +652,12 @@ cluster_config {
             * `boot_disk_provisioned_iops` - (Optional) Indicates how many IOPS to provision for the disk.
             * `boot_disk_provisioned_throughput` - (Optional) Indicates how much throughput to provision for the disk.
             * `local_ssd_interface` - (Optional) Interface type of local SSDs (no Local SSDs or NVMe).
+            * `attached_disk_config` - (Optional) Attached disk configuration.
+                * `disk_size_gb` - (Optional) Size of the attached disk, specified in GB.
+                * `disk_type` - (Optional, Deprecated) The disk type of the attached disk. Such as "pd-ssd" or "pd-standard". `disk_type` is deprecated and will be removed in a future major release. Use `type` instead.
+                * `type` - (Optional) The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".
+                * `provisioned_iops` - (Optional) Indicates how many IOPS to provision for the disk.
+                * `provisioned_throughput` - (Optional) Indicates how much throughput to provision for the disk.
 
 * `accelerators` (Optional) The Compute Engine accelerator (GPU) configuration for these instances. Can be specified multiple times.
 
@@ -608,6 +689,14 @@ cluster_config {
       instance_selection_list {
         machine_types = ["n2-standard-2","n1-standard-2"]
         rank          = 1
+        disk_config {
+          boot_disk_size_gb = 30
+          boot_disk_type    = "pd-standard"
+          attached_disk_config {
+            disk_size_gb = 30
+            type         = "hyperdisk-balanced"
+          }
+        }
       }
       instance_selection_list {
         machine_types = ["n2d-standard-2"]
@@ -652,6 +741,13 @@ cluster_config {
     * `num_local_ssds` - (Optional) The amount of local SSD disks that will be
 	attached to each worker cluster node. Defaults to 0.
 
+    * `attached_disk_config` - (Optional) Attached disk configuration.
+        * `disk_size_gb` - (Optional) Size of the attached disk, specified in GB.
+        * `disk_type` - (Optional, Deprecated) The disk type of the attached disk. Such as "pd-ssd" or "pd-standard". `disk_type` is deprecated and will be removed in a future major release. Use `type` instead.
+        * `type` - (Optional) The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".
+        * `provisioned_iops` - (Optional) Indicates how many IOPS to provision for the disk.
+        * `provisioned_throughput` - (Optional) Indicates how much throughput to provision for the disk.
+
 * `image_uri` (Optional) The URI for the image to use for this worker.  See [the guide](https://cloud.google.com/dataproc/docs/guides/dataproc-images)
     for more information.
 
@@ -670,6 +766,12 @@ cluster_config {
             * `boot_disk_provisioned_iops` - (Optional) Indicates how many IOPS to provision for the disk.
             * `boot_disk_provisioned_throughput` - (Optional) Indicates how much throughput to provision for the disk.
             * `local_ssd_interface` - (Optional) Interface type of local SSDs (no Local SSDs or NVMe).
+            * `attached_disk_config` - (Optional) Attached disk configuration.
+                * `disk_size_gb` - (Optional) Size of the attached disk, specified in GB.
+                * `disk_type` - (Optional, Deprecated) The disk type of the attached disk. Such as "pd-ssd" or "pd-standard". `disk_type` is deprecated and will be removed in a future major release. Use `type` instead.
+                * `type` - (Optional) The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".
+                * `provisioned_iops` - (Optional) Indicates how many IOPS to provision for the disk.
+                * `provisioned_throughput` - (Optional) Indicates how much throughput to provision for the disk.
 
 * `accelerators` (Optional) The Compute Engine accelerator configuration for these instances. Can be specified multiple times.
 
@@ -743,6 +845,13 @@ will be set for you based on whatever was set for the `worker_config.machine_typ
 	* `num_local_ssds` - (Optional) The amount of local SSD disks that will be
 	attached to each preemptible worker node. Defaults to 0.
 
+        * `attached_disk_config` - (Optional) Attached disk configuration.
+            * `disk_size_gb` - (Optional) Size of the attached disk, specified in GB.
+            * `disk_type` - (Optional, Deprecated) The disk type of the attached disk. Such as "pd-ssd" or "pd-standard". `disk_type` is deprecated and will be removed in a future major release. Use `type` instead.
+            * `type` - (Optional) The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".
+            * `provisioned_iops` - (Optional) Indicates how many IOPS to provision for the disk.
+            * `provisioned_throughput` - (Optional) Indicates how much throughput to provision for the disk.
+
 * `instance_flexibility_policy` (Optional) Instance flexibility Policy allowing a mixture of VM shapes and provisioning models.
 
     * `instance_selection_list` - (Optional) List of instance selection options that the group will use when creating new VMs.
@@ -754,6 +863,96 @@ will be set for you based on whatever was set for the `worker_config.machine_typ
       * `standard_capacity_base` - (Optional) The base capacity that will always use Standard VMs to avoid risk of more preemption than the minimum capacity you need. Dataproc will create only standard VMs until it reaches standardCapacityBase, then it will start using standardCapacityPercentAboveBase to mix Spot with Standard VMs. eg. If 15 instances are requested and standardCapacityBase is 5, Dataproc will create 5 standard VMs and then start mixing spot and standard VMs for remaining 10 instances.
 
       * `standard_capacity_percent_above_base` - (Optional) The percentage of target capacity that should use Standard VM. The remaining percentage will use Spot VMs. The percentage applies only to the capacity above standardCapacityBase. eg. If 15 instances are requested and standardCapacityBase is 5 and standardCapacityPercentAboveBase is 30, Dataproc will create 5 standard VMs and then start mixing spot and standard VMs for remaining 10 instances. The mix will be 30% standard and 70% spot.
+- - -
+
+<a name="nested_master_flexible_config"></a>The `cluster_config.master_flexible_config` block supports:
+
+```hcl
+cluster_config {
+  master_flexible_config {
+    num_instances     = 1
+    core_count        = 4
+    hardware_class    = "STANDARD"
+    boot_disk_size_gb = 100
+  }
+}
+```
+
+* `num_instances` - (Optional) Must be `1`. Defaults to `1`. Changing this forces a new resource to be created.
+
+* `core_count` - (Required) The number of vCPUs per instance. Must be a power of 2
+   (2, 4, 8, 16, or 32). Changing this forces a new resource to be created.
+
+* `hardware_class` - (Optional) Controls the hardware class for the flexible instance group.
+   Allowed values are `"STANDARD"` and `"PERFORMANCE"`. Defaults to `"STANDARD"`.
+   Changing this forces a new resource to be created.
+
+* `boot_disk_size_gb` - (Optional) The boot disk size in GB.
+   Changing this forces a new resource to be created.
+- - -
+
+<a name="nested_worker_flexible_config"></a>The `cluster_config.worker_flexible_config` block supports:
+
+```hcl
+cluster_config {
+  worker_flexible_config {
+    num_instances     = 2
+    core_count        = 8
+    hardware_class    = "STANDARD"
+    boot_disk_size_gb = 100
+  }
+}
+```
+
+* `num_instances` - (Required) Specifies the number of worker instances to create.
+   Represents the desired capacity of the group and is updatable in place.
+
+* `core_count` - (Required) The number of vCPUs per instance. Must be a power of 2
+   (2, 4, 8, 16, or 32). Changing this forces a new resource to be created.
+
+* `hardware_class` - (Optional) Controls the hardware class for the flexible instance group.
+   Allowed values are `"STANDARD"` and `"PERFORMANCE"`. Defaults to `"STANDARD"`.
+   Changing this forces a new resource to be created.
+
+* `boot_disk_size_gb` - (Optional) The boot disk size in GB.
+   Changing this forces a new resource to be created.
+- - -
+
+<a name="nested_secondary_worker_flexible_config"></a>The `cluster_config.secondary_worker_flexible_config` block supports:
+
+```hcl
+cluster_config {
+  secondary_worker_flexible_config {
+    num_instances     = 2
+    core_count        = 8
+    hardware_class    = "PERFORMANCE"
+    boot_disk_size_gb = 100
+  }
+}
+```
+
+!> **Warning:** Dataproc can only change `num_instances` in place, with a
+[`clusters.patch`](https://cloud.google.com/dataproc/docs/reference/rest/v1/projects.regions.clusters/patch)
+request. The shape fields (`core_count`, `hardware_class` and `boot_disk_size_gb`) are
+[fixed at creation](https://cloud.google.com/dataproc/docs/reference/rest/v1/ClusterConfig#FlexibleInstanceGroupConfig),
+so changing them recreates the cluster **unless** `worker_flexible_config` is set and the shape
+fields in `secondary_worker_flexible_config` exactly match the equivalent fields in `worker_flexible_config`.
+
+-> **Note:** Removing the block from your configuration does not change the cluster; set `num_instances = 0`
+to remove all secondary workers.
+
+* `num_instances` - (Optional) Specifies the number of secondary worker instances to create.
+   Defaults to `0`; can be scaled down to `0`; updatable in place.
+
+* `core_count` - (Required) The number of vCPUs per instance. Must be a power of 2
+   (2, 4, 8, 16, or 32). Changing this on an existing secondary worker group forces a new resource to be created.
+
+* `hardware_class` - (Optional) Controls the hardware class for the flexible instance group.
+   Allowed values are `"STANDARD"` and `"PERFORMANCE"`. Defaults to `"STANDARD"`.
+   Changing this on an existing secondary worker group forces a new resource to be created.
+
+* `boot_disk_size_gb` - (Optional) The boot disk size in GB. Changing this on an existing
+   secondary worker group forces a new resource to be created.
 - - -
 
 <a name="nested_software_config"></a>The `cluster_config.software_config` block supports:

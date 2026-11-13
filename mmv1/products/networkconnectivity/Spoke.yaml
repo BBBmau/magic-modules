@@ -50,13 +50,6 @@ samples:
           network_name: net
           hub_name: hub1
           spoke_name: spoke1
-        test_vars_overrides:
-          # for backward compatible
-          network_name: '"net" + randomSuffix'
-          # for backward compatible
-          hub_name: '"hub1" + randomSuffix'
-          # for backward compatible
-          spoke_name: '"spoke1" + randomSuffix'
   - name: network_connectivity_spoke_linked_vpc_network_group
     primary_resource_id: primary
     steps:
@@ -95,12 +88,6 @@ samples:
           hub_name: basic-hub1
           vpn_tunnel_1_spoke_name: vpn-tunnel-1-spoke
           vpn_tunnel_2_spoke_name: vpn-tunnel-2-spoke
-        # Skip due to multiple fine-grained resources
-        test_vars_overrides:
-          # for backward compatible
-          vpn_tunnel_1_name: '"tunnel1" + randomSuffix'
-          # for backward compatible
-          vpn_tunnel_2_name: '"tunnel2" + randomSuffix'
   - name: network_connectivity_spoke_interconnect_attachment_basic
     primary_resource_id: primary
     steps:
@@ -126,15 +113,11 @@ samples:
     steps:
       - name: network_connectivity_spoke_center_group
         resource_id_vars:
+          network_name: net
           hub_name: hub-basic
           spoke_name: vpc-spoke
           auto_accept_project_1_name: foo
           auto_accept_project_2_name: bar
-        test_vars_overrides:
-          # for backward compatible
-          auto_accept_project_1_name: '"foo" + randomSuffix'
-          # for backward compatible
-          auto_accept_project_2_name: '"bar" + randomSuffix'
   - name: network_connectivity_spoke_linked_vpc_network_ipv6_support
     primary_resource_id: primary
     steps:
@@ -143,26 +126,14 @@ samples:
           network_name: net
           hub_name: hub1
           spoke_name: spoke1-ipv6
-        test_vars_overrides:
-          # for backward compatible
-          network_name: '"net" + randomSuffix'
-          # for backward compatible
-          hub_name: '"hub1" + randomSuffix'
   - name: network_connectivity_spoke_gateway
     primary_resource_id: primary
-    min_version: beta
     steps:
       - name: network_connectivity_spoke_gateway
-        min_version: beta
         resource_id_vars:
           network_name: net-spoke
           hub_name: hub
           spoke_name: gateway
-        test_vars_overrides:
-          # for backward compatible
-          hub_name: '"hub" + randomSuffix'
-          # for backward compatible
-          spoke_name: '"gateway" + randomSuffix'
 parameters:
   - name: location
     type: String
@@ -433,7 +404,6 @@ properties:
     type: NestedObject
     description: This is a gateway that can apply specialized processing to traffic going through it.
     immutable: true
-    min_version: beta
     conflicts:
       - linked_interconnect_attachments
       - linked_router_appliance_instances
@@ -465,7 +435,6 @@ properties:
       - name: routers
         type: Array
         description: Set of Cloud Routers that are attached to this NCC-GW
-        min_version: beta
         item_type:
           type: String
           description: Cloud Router that is attached to the NCC-GW
@@ -478,11 +447,6 @@ properties:
     type: String
     description: Output only. The current lifecycle state of this spoke.
     output: true
-    exactly_one_of:
-      - STATE_UNSPECIFIED
-      - CREATING
-      - ACTIVE
-      - DELETING
   - name: reasons
     type: Array
     output: true

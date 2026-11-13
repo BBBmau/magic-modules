@@ -12,13 +12,25 @@ here, upstream — never in the downstream repos.
   provider task.
 - **`.agents/skills/`** — reusable skills the workflows compose (generation, testing, log parsing,
   troubleshooting). Each skill's `SKILL.md` frontmatter states when to use it.
-- **`.agents/knowledge/`** — the curated knowledge base (initial seeding in progress). When present,
-  consult its `index.md` at decision points and open only the entries the task needs.
+- **[.agents/knowledge/index.md](.agents/knowledge/index.md)** — the knowledge index: a short map of
+  where provider knowledge lives. Refer to this to check for relevant patterns or instructions.
 - **`.agents/archive/`** — parked tracks (currently TGC). Not maintained; do not use as reference.
 
 ## Ground rules
 
-- **Never weaken a test or check to make it pass.** No disabling or skipping tests, and no test-dodging
-  behavior flags (`ignore_read`, `default_from_api`, `ImportStateVerifyIgnore`) without an adjacent
+- **Never weaken baseline test coverage to make a test pass.** No disabling or skipping tests, and no test-dodging
+  behavior flags (`ignore_read`, `ImportStateVerifyIgnore`) without an adjacent
   comment justifying the API behavior that requires them.
 - **Verify before opening a PR**: generate, build, and run the tests relevant to what you changed.
+- **Prefer adding commits on PR updates**: once a branch is pushed or a PR is open, push new commits for subsequent
+  updates rather than amending, rebasing, or force-pushing unless instructed otherwise.
+
+## Parallel work
+
+- **Work in a git worktree**: do task work in a git worktree on its own branch. Before starting, `git fetch upstream`
+  and make sure the branch is based on current `upstream/main`. Don't switch branches or generate code in a shared
+  primary checkout.
+- **Keep the worktree until the PR is done**: push PR branches under a descriptive branch name, and keep the
+  magic-modules worktree so follow-up fixes and reviews have the checkout.
+- **Bazel in worktrees**: inside a worktree, `make` defaults to `USE_BAZEL=0` (set `USE_BAZEL=1` to override).
+- **Helper scripts**: prefer Go over Python or complex shell scripts.

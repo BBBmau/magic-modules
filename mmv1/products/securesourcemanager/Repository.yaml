@@ -46,9 +46,13 @@ async:
     resource_inside_response: false
 deletion_policy_default: PREVENT
 autogen_async: true
+# Repositories are deleted automatically when their parent Instance is swept,
+# and ListRepositories requires ?instance=<full_instance_name>.
+exclude_sweeper: true
 samples:
   - name: secure_source_manager_repository_basic
     primary_resource_id: default
+    external_providers: [time]
     steps:
       - name: secure_source_manager_repository_basic
         resource_id_vars:
@@ -61,6 +65,59 @@ samples:
           deletion_policy: '"DELETE"'
         ignore_read_extra:
           - deletion_policy
+      - name: secure_source_manager_repository_secret_scanning
+        resource_id_vars:
+          repository_id: my-repository
+          instance_id: my-instance
+          deletion_policy: PREVENT
+        vars:
+          description: This is a test repository
+          secret_scanning_enabled: 'true'
+          inspect_template: null
+        test_env_vars:
+          project: PROJECT_NAME
+        test_vars_overrides:
+          deletion_policy: '"DELETE"'
+        oics_vars_overrides:
+          deletion_policy: '"DELETE"'
+        ignore_read_extra:
+          - deletion_policy
+      - name: secure_source_manager_repository_secret_scanning
+        resource_id_vars:
+          repository_id: my-repository
+          instance_id: my-instance
+          deletion_policy: PREVENT
+        vars:
+          description: This is an updated test repository
+          secret_scanning_enabled: 'false'
+          inspect_template: null
+        test_env_vars:
+          project: PROJECT_NAME
+        test_vars_overrides:
+          deletion_policy: '"DELETE"'
+        oics_vars_overrides:
+          deletion_policy: '"DELETE"'
+        ignore_read_extra:
+          - deletion_policy
+      - name: secure_source_manager_repository_secret_scanning
+        include_step_doc: true
+        resource_id_vars:
+          repository_id: my-repository
+          instance_id: my-instance
+          deletion_policy: PREVENT
+        vars:
+          description: This is a test repository
+          secret_scanning_enabled: 'true'
+          inspect_template: google_data_loss_prevention_inspect_template.template.id
+        test_env_vars:
+          project: PROJECT_NAME
+        test_vars_overrides:
+          deletion_policy: '"DELETE"'
+          inspect_template: '"google_data_loss_prevention_inspect_template.template.id"'
+        oics_vars_overrides:
+          deletion_policy: '"DELETE"'
+        ignore_read_extra:
+          - deletion_policy
   - name: secure_source_manager_repository_initial_config
     primary_resource_id: default
     steps:
@@ -68,6 +125,7 @@ samples:
         resource_id_vars:
           repository_id: my-repository
           instance_id: my-instance
+          sa_id: my-sa
           deletion_policy: PREVENT
         test_vars_overrides:
           deletion_policy: '"DELETE"'
@@ -75,6 +133,7 @@ samples:
           deletion_policy: '"DELETE"'
         ignore_read_extra:
           - deletion_policy
+
 parameters:
   - name: location
     type: String
@@ -174,3 +233,31 @@ properties:
         description: |
           README template name.
           Valid values can be viewed at https://cloud.google.com/secure-source-manager/docs/reference/rest/v1/projects.locations.repositories#initialconfig.
+  - name: 'serviceAccount'
+    type: String
+    description: |
+      Repository level service account.
+  - name: 'scanConfig'
+    type: NestedObject
+    diff_suppress_func: 'tpgresource.EmptyOrUnsetBlockDiffSuppress'
+    update_mask_fields:
+      - scan_config.secret_scan_config.enabled
+      - scan_config.secret_scan_config.inspect_template
+    description: |
+      Provides configuration for scanning.
+    properties:
+      - name: 'secretScanConfig'
+        type: NestedObject
+        description: |
+          Configuration for secret scanning.
+        properties:
+          - name: 'enabled'
+            type: Boolean
+            send_empty_value: true
+            description: |
+              Enables secret scanning for the repository.
+          - name: 'inspectTemplate'
+            type: String
+            default_from_api: true
+            description: |
+              The DLP inspect template to use for secret scanning.

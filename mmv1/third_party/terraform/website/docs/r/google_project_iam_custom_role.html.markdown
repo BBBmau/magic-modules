@@ -62,11 +62,11 @@ The following arguments are supported:
  In addition to the arguments listed above, the following computed attributes are
 exported:
 
- * `deleted` - (Optional) The current deleted state of the role.
+* `deleted` - (Optional) The current deleted state of the role.
 
- * `id` - an identifier for the resource with the format `projects/{{project}}/roles/{{role_id}}`
+* `id` - an identifier for the resource with the format `projects/{{project}}/roles/{{role_id}}`
 
- * `name` - The name of the role in the format `projects/{{project}}/roles/{{role_id}}`. Like `id`, this field can be used as a reference in other resources such as IAM role bindings.
+* `name` - The name of the role in the format `projects/{{project}}/roles/{{role_id}}`. Like `id`, this field can be used as a reference in other resources such as IAM role bindings.
 
 ## Import
 
@@ -81,6 +81,18 @@ In Terraform v1.5.0 and later, use an [`import` block](https://developer.hashico
 ```tf
 import {
   id = "projects/{{project}}/roles/{{role_id}}"
+  to = google_project_iam_custom_role.default
+}
+```
+
+In Terraform v1.12.0 and later, use an [`identity` block](https://developer.hashicorp.com/terraform/language/block/import#identity) to import Custom Roles using identity values. For example:
+
+```tf
+import {
+  identity = {
+    project = "{{project}}"
+    role_id = "{{role_id}}"
+  }
   to = google_project_iam_custom_role.default
 }
 ```

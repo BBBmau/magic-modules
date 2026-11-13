@@ -1,6 +1,7 @@
 package dataproc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/customdiff"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -66,6 +68,7 @@ var (
 		"cluster_config.0.gce_cluster_config.0.reservation_affinity",
 		"cluster_config.0.gce_cluster_config.0.node_group_affinity",
 		"cluster_config.0.gce_cluster_config.0.confidential_instance_config",
+		"cluster_config.0.gce_cluster_config.0.multi_zone_config",
 	}
 
 	schieldedInstanceConfigKeys = []string{
@@ -124,6 +127,9 @@ var (
 		"cluster_config.0.endpoint_config",
 		"cluster_config.0.dataproc_metric_config",
 		"cluster_config.0.auxiliary_node_groups",
+		"cluster_config.0.master_flexible_config",
+		"cluster_config.0.worker_flexible_config",
+		"cluster_config.0.secondary_worker_flexible_config",
 	}
 )
 
@@ -141,6 +147,7 @@ func diskConfigKeys(configName string) []string {
 		"cluster_config.0." + configName + ".0.disk_config.0.boot_disk_provisioned_iops",
 		"cluster_config.0." + configName + ".0.disk_config.0.boot_disk_provisioned_throughput",
 		"cluster_config.0." + configName + ".0.disk_config.0.local_ssd_interface",
+		"cluster_config.0." + configName + ".0.disk_config.0.attached_disk_config",
 	}
 }
 
@@ -204,6 +211,7 @@ func ResourceDataprocCluster() *schema.Resource {
 			tpgresource.DefaultProviderProject,
 			// User labels are not supported in Dataproc Virtual Cluster
 			tpgresource.SetLabelsDiffWithoutAttributionLabel,
+			secondaryWorkerFlexibleConfigForceNew,
 		),
 
 		SchemaVersion: 1,
@@ -626,12 +634,13 @@ func ResourceDataprocCluster() *schema.Resource {
 								Schema: map[string]*schema.Schema{
 
 									"zone": {
-										Type:         schema.TypeString,
-										Optional:     true,
-										Computed:     true,
-										AtLeastOneOf: gceClusterConfigKeys,
-										ForceNew:     true,
-										Description:  `The GCP zone where your data is stored and used (i.e. where the master and the worker nodes will be created in). If region is set to 'global' (default) then zone is mandatory, otherwise GCP is able to make use of Auto Zone Placement to determine this automatically for you. Note: This setting additionally determines and restricts which computing resources are available for use with other configs such as cluster_config.master_config.machine_type and cluster_config.worker_config.machine_type.`,
+										Type:          schema.TypeString,
+										Optional:      true,
+										Computed:      true,
+										AtLeastOneOf:  gceClusterConfigKeys,
+										ForceNew:      true,
+										ConflictsWith: []string{"cluster_config.0.gce_cluster_config.0.multi_zone_config"},
+										Description:   `The GCP zone where your data is stored and used (i.e. where the master and the worker nodes will be created in). If region is set to 'global' (default) then zone is mandatory, otherwise GCP is able to make use of Auto Zone Placement to determine this automatically for you. Note: This setting additionally determines and restricts which computing resources are available for use with other configs such as cluster_config.master_config.machine_type and cluster_config.worker_config.machine_type.`,
 									},
 
 									"network": {
@@ -838,6 +847,25 @@ func ResourceDataprocCluster() *schema.Resource {
 											},
 										},
 									},
+									"multi_zone_config": {
+										Type:          schema.TypeList,
+										Optional:      true,
+										ForceNew:      true,
+										AtLeastOneOf:  gceClusterConfigKeys,
+										MaxItems:      1,
+										ConflictsWith: []string{"cluster_config.0.gce_cluster_config.0.zone"},
+										Description:   `Configuration for multi-zonal clusters that can create instances across multiple Zones within the Region.`,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"target_shape": {
+													Type:        schema.TypeString,
+													Required:    true,
+													ForceNew:    true,
+													Description: `The distribution shape of the nodes in the multi-zonal cluster. Valid values are "ANY".`,
+												},
+											},
+										},
+									},
 								},
 							},
 						},
@@ -972,6 +1000,47 @@ func ResourceDataprocCluster() *schema.Resource {
 													AtLeastOneOf: masterDiskConfigKeys,
 													ForceNew:     true,
 												},
+												"attached_disk_config": {
+													Type:         schema.TypeList,
+													Optional:     true,
+													Description:  `Optional. Attached disk configuration.`,
+													AtLeastOneOf: masterDiskConfigKeys,
+													Elem: &schema.Resource{
+														Schema: map[string]*schema.Schema{
+															"disk_size_gb": {
+																Type:        schema.TypeInt,
+																Optional:    true,
+																Description: `Size of the attached disk, specified in GB.`,
+																ForceNew:    true,
+															},
+															"disk_type": {
+																Type:        schema.TypeString,
+																Optional:    true,
+																Deprecated:  "`disk_type` is deprecated and will be removed in a future major release. Use `type` instead.",
+																Description: `The disk type of the attached disk. Such as "pd-ssd" or "pd-standard".`,
+																ForceNew:    true,
+															},
+															"type": {
+																Type:        schema.TypeString,
+																Optional:    true,
+																Description: `The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".`,
+																ForceNew:    true,
+															},
+															"provisioned_iops": {
+																Type:        schema.TypeInt,
+																Optional:    true,
+																Description: `Indicates how many IOPS to provision for the disk. This sets the number of I/O operations per second that the disk can handle.`,
+																ForceNew:    true,
+															},
+															"provisioned_throughput": {
+																Type:        schema.TypeInt,
+																Optional:    true,
+																Description: `Indicates how much throughput to provision for the disk. This sets the number of throughput mb per second that the disk can handle.`,
+																ForceNew:    true,
+															},
+														},
+													},
+												},
 											},
 										},
 									},
@@ -1080,6 +1149,46 @@ func ResourceDataprocCluster() *schema.Resource {
 																			Optional:    true,
 																			Description: `The amount of local SSD disks that will be attached to each cluster node. Defaults to 0.`,
 																			ForceNew:    true,
+																		},
+																		"attached_disk_config": {
+																			Type:        schema.TypeList,
+																			Optional:    true,
+																			Description: `Optional. Attached disk configuration.`,
+																			Elem: &schema.Resource{
+																				Schema: map[string]*schema.Schema{
+																					"disk_size_gb": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Size of the attached disk, specified in GB.`,
+																						ForceNew:    true,
+																					},
+																					"disk_type": {
+																						Type:        schema.TypeString,
+																						Optional:    true,
+																						Deprecated:  "`disk_type` is deprecated and will be removed in a future major release. Use `type` instead.",
+																						Description: `The disk type of the attached disk. Such as "pd-ssd" or "pd-standard".`,
+																						ForceNew:    true,
+																					},
+																					"type": {
+																						Type:        schema.TypeString,
+																						Optional:    true,
+																						Description: `The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".`,
+																						ForceNew:    true,
+																					},
+																					"provisioned_iops": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Indicates how many IOPS to provision for the disk. This sets the number of I/O operations per second that the disk can handle.`,
+																						ForceNew:    true,
+																					},
+																					"provisioned_throughput": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Indicates how much throughput to provision for the disk. This sets the number of throughput mb per second that the disk can handle.`,
+																						ForceNew:    true,
+																					},
+																				},
+																			},
 																		},
 																	},
 																},
@@ -1249,6 +1358,47 @@ func ResourceDataprocCluster() *schema.Resource {
 													AtLeastOneOf: workerDiskConfigKeys,
 													ForceNew:     true,
 												},
+												"attached_disk_config": {
+													Type:         schema.TypeList,
+													Optional:     true,
+													Description:  `Optional. Attached disk configuration.`,
+													AtLeastOneOf: workerDiskConfigKeys,
+													Elem: &schema.Resource{
+														Schema: map[string]*schema.Schema{
+															"disk_size_gb": {
+																Type:        schema.TypeInt,
+																Optional:    true,
+																Description: `Size of the attached disk, specified in GB.`,
+																ForceNew:    true,
+															},
+															"disk_type": {
+																Type:        schema.TypeString,
+																Optional:    true,
+																Deprecated:  "`disk_type` is deprecated and will be removed in a future major release. Use `type` instead.",
+																Description: `The disk type of the attached disk. Such as "pd-ssd" or "pd-standard".`,
+																ForceNew:    true,
+															},
+															"type": {
+																Type:        schema.TypeString,
+																Optional:    true,
+																Description: `The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".`,
+																ForceNew:    true,
+															},
+															"provisioned_iops": {
+																Type:        schema.TypeInt,
+																Optional:    true,
+																Description: `Indicates how many IOPS to provision for the disk. This sets the number of I/O operations per second that the disk can handle.`,
+																ForceNew:    true,
+															},
+															"provisioned_throughput": {
+																Type:        schema.TypeInt,
+																Optional:    true,
+																Description: `Indicates how much throughput to provision for the disk. This sets the number of throughput mb per second that the disk can handle.`,
+																ForceNew:    true,
+															},
+														},
+													},
+												},
 											},
 										},
 									},
@@ -1376,6 +1526,46 @@ func ResourceDataprocCluster() *schema.Resource {
 																			Optional:    true,
 																			Description: `The amount of local SSD disks that will be attached to each cluster node. Defaults to 0.`,
 																			ForceNew:    true,
+																		},
+																		"attached_disk_config": {
+																			Type:        schema.TypeList,
+																			Optional:    true,
+																			Description: `Optional. Attached disk configuration.`,
+																			Elem: &schema.Resource{
+																				Schema: map[string]*schema.Schema{
+																					"disk_size_gb": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Size of the attached disk, specified in GB.`,
+																						ForceNew:    true,
+																					},
+																					"disk_type": {
+																						Type:        schema.TypeString,
+																						Optional:    true,
+																						Deprecated:  "`disk_type` is deprecated and will be removed in a future major release. Use `type` instead.",
+																						Description: `The disk type of the attached disk. Such as "pd-ssd" or "pd-standard".`,
+																						ForceNew:    true,
+																					},
+																					"type": {
+																						Type:        schema.TypeString,
+																						Optional:    true,
+																						Description: `The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".`,
+																						ForceNew:    true,
+																					},
+																					"provisioned_iops": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Indicates how many IOPS to provision for the disk. This sets the number of I/O operations per second that the disk can handle.`,
+																						ForceNew:    true,
+																					},
+																					"provisioned_throughput": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Indicates how much throughput to provision for the disk. This sets the number of throughput mb per second that the disk can handle.`,
+																						ForceNew:    true,
+																					},
+																				},
+																			},
 																		},
 																	},
 																},
@@ -1515,6 +1705,48 @@ func ResourceDataprocCluster() *schema.Resource {
 													ForceNew:     true,
 													Description:  `Interface type of local SSDs (default is "scsi"). Valid values: "scsi" (Small Computer System Interface), "nvme" (Non-Volatile Memory Express).`,
 												},
+
+												"attached_disk_config": {
+													Type:         schema.TypeList,
+													Optional:     true,
+													Description:  `Optional. Attached disk configuration.`,
+													AtLeastOneOf: preemptibleWorkerDiskConfigKeys,
+													Elem: &schema.Resource{
+														Schema: map[string]*schema.Schema{
+															"disk_size_gb": {
+																Type:        schema.TypeInt,
+																Optional:    true,
+																Description: `Size of the attached disk, specified in GB.`,
+																ForceNew:    true,
+															},
+															"disk_type": {
+																Type:        schema.TypeString,
+																Optional:    true,
+																Deprecated:  "`disk_type` is deprecated and will be removed in a future major release. Use `type` instead.",
+																Description: `The disk type of the attached disk. Such as "pd-ssd" or "pd-standard".`,
+																ForceNew:    true,
+															},
+															"type": {
+																Type:        schema.TypeString,
+																Optional:    true,
+																Description: `The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".`,
+																ForceNew:    true,
+															},
+															"provisioned_iops": {
+																Type:        schema.TypeInt,
+																Optional:    true,
+																Description: `Indicates how many IOPS to provision for the disk. This sets the number of I/O operations per second that the disk can handle.`,
+																ForceNew:    true,
+															},
+															"provisioned_throughput": {
+																Type:        schema.TypeInt,
+																Optional:    true,
+																Description: `Indicates how much throughput to provision for the disk. This sets the number of throughput mb per second that the disk can handle.`,
+																ForceNew:    true,
+															},
+														},
+													},
+												},
 											},
 										},
 									},
@@ -1610,6 +1842,46 @@ func ResourceDataprocCluster() *schema.Resource {
 																			Optional:    true,
 																			Description: `The amount of local SSD disks that will be attached to each cluster node. Defaults to 0.`,
 																			ForceNew:    true,
+																		},
+																		"attached_disk_config": {
+																			Type:        schema.TypeList,
+																			Optional:    true,
+																			Description: `Optional. Attached disk configuration.`,
+																			Elem: &schema.Resource{
+																				Schema: map[string]*schema.Schema{
+																					"disk_size_gb": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Size of the attached disk, specified in GB.`,
+																						ForceNew:    true,
+																					},
+																					"disk_type": {
+																						Type:        schema.TypeString,
+																						Optional:    true,
+																						Deprecated:  "`disk_type` is deprecated and will be removed in a future major release. Use `type` instead.",
+																						Description: `The disk type of the attached disk. Such as "pd-ssd" or "pd-standard".`,
+																						ForceNew:    true,
+																					},
+																					"type": {
+																						Type:        schema.TypeString,
+																						Optional:    true,
+																						Description: `The disk type of the attached disk. Currently only supports Hyperdisks: "hyperdisk-balanced", "hyperdisk-extreme", "hyperdisk-ml", "hyperdisk-throughput".`,
+																						ForceNew:    true,
+																					},
+																					"provisioned_iops": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Indicates how many IOPS to provision for the disk. This sets the number of I/O operations per second that the disk can handle.`,
+																						ForceNew:    true,
+																					},
+																					"provisioned_throughput": {
+																						Type:        schema.TypeInt,
+																						Optional:    true,
+																						Description: `Indicates how much throughput to provision for the disk. This sets the number of throughput mb per second that the disk can handle.`,
+																						ForceNew:    true,
+																					},
+																				},
+																			},
 																		},
 																	},
 																},
@@ -2185,6 +2457,138 @@ by Dataproc`,
 								},
 							},
 						},
+						"master_flexible_config": {
+							Type:         schema.TypeList,
+							Optional:     true,
+							AtLeastOneOf: clusterConfigKeys,
+							Computed:     true,
+							MaxItems:     1,
+							Description:  `The configuration for the master flexible instance group in High Obtainability (HO) mode.`,
+							ConflictsWith: []string{
+								"cluster_config.0.master_config",
+								"cluster_config.0.gce_cluster_config.0.zone",
+							},
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"num_instances": {
+										Type:         schema.TypeInt,
+										Optional:     true,
+										Default:      1,
+										ForceNew:     true,
+										ValidateFunc: validation.IntInSlice([]int{1}),
+										Description:  `Specifies the number of master instances to create. In High Obtainability (HO) mode, this must be 1. Defaults to 1. Changing this forces a new resource to be created.`,
+									},
+									"core_count": {
+										Type:         schema.TypeInt,
+										Required:     true,
+										ForceNew:     true,
+										ValidateFunc: validation.IntInSlice([]int{2, 4, 8, 16, 32}),
+										Description:  `The number of vCPUs per instance. Must be a power of 2: 2, 4, 8, 16, or 32. Changing this forces a new resource to be created.`,
+									},
+									"hardware_class": {
+										Type:         schema.TypeString,
+										Optional:     true,
+										ForceNew:     true,
+										Default:      "STANDARD",
+										ValidateFunc: validation.StringInSlice([]string{"STANDARD", "PERFORMANCE"}, false),
+										Description:  `The hardware class of instances. Allowed values are "STANDARD" and "PERFORMANCE". Defaults to "STANDARD". Changing this forces a new resource to be created.`,
+									},
+									"boot_disk_size_gb": {
+										Type:        schema.TypeInt,
+										Optional:    true,
+										ForceNew:    true,
+										Description: `The boot disk size in GB. Changing this forces a new resource to be created.`,
+									},
+								},
+							},
+						},
+						"worker_flexible_config": {
+							Type:         schema.TypeList,
+							Optional:     true,
+							AtLeastOneOf: clusterConfigKeys,
+							Computed:     true,
+							MaxItems:     1,
+							Description:  `The configuration for the worker flexible instance group in High Obtainability (HO) mode.`,
+							ConflictsWith: []string{
+								"cluster_config.0.worker_config",
+								"cluster_config.0.gce_cluster_config.0.zone",
+							},
+							RequiredWith: []string{"cluster_config.0.master_flexible_config"},
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"num_instances": {
+										Type:         schema.TypeInt,
+										Required:     true,
+										ValidateFunc: validation.IntAtLeast(2),
+										Description:  `Specifies the number of worker instances to create. Represents the desired capacity of the group and is updatable in place.`,
+									},
+									"core_count": {
+										Type:         schema.TypeInt,
+										Required:     true,
+										ForceNew:     true,
+										ValidateFunc: validation.IntInSlice([]int{2, 4, 8, 16, 32}),
+										Description:  `The number of vCPUs per instance. Must be a power of 2: 2, 4, 8, 16, or 32. Changing this forces a new resource to be created.`,
+									},
+									"hardware_class": {
+										Type:         schema.TypeString,
+										Optional:     true,
+										ForceNew:     true,
+										Default:      "STANDARD",
+										ValidateFunc: validation.StringInSlice([]string{"STANDARD", "PERFORMANCE"}, false),
+										Description:  `The hardware class of instances. Allowed values are "STANDARD" and "PERFORMANCE". Defaults to "STANDARD". Changing this forces a new resource to be created.`,
+									},
+									"boot_disk_size_gb": {
+										Type:        schema.TypeInt,
+										Optional:    true,
+										ForceNew:    true,
+										Description: `The boot disk size in GB. Changing this forces a new resource to be created.`,
+									},
+								},
+							},
+						},
+						"secondary_worker_flexible_config": {
+							Type:         schema.TypeList,
+							Optional:     true,
+							AtLeastOneOf: clusterConfigKeys,
+							Computed:     true,
+							MaxItems:     1,
+							Description:  `The configuration for the secondary worker flexible instance group in High Obtainability (HO) mode.`,
+							ConflictsWith: []string{
+								"cluster_config.0.preemptible_worker_config",
+								"cluster_config.0.gce_cluster_config.0.zone",
+							},
+							RequiredWith: []string{"cluster_config.0.master_flexible_config"},
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"num_instances": {
+										Type:         schema.TypeInt,
+										Optional:     true,
+										Default:      0,
+										ValidateFunc: validation.IntAtLeast(0),
+										Description:  `Specifies the number of secondary worker instances to create. Represents the desired capacity of the group and is updatable in place. Defaults to 0; can be scaled down to 0.`,
+									},
+									"core_count": {
+										Type:         schema.TypeInt,
+										Required:     true,
+										ValidateFunc: validation.IntInSlice([]int{2, 4, 8, 16, 32}),
+										Description:  `The number of vCPUs per instance. Must be a power of 2: 2, 4, 8, 16, or 32. Changing this on an existing secondary worker group forces a new resource to be created.`,
+									},
+									"hardware_class": {
+										Type:         schema.TypeString,
+										Optional:     true,
+										Default:      "STANDARD",
+										ValidateFunc: validation.StringInSlice([]string{"STANDARD", "PERFORMANCE"}, false),
+										Description:  `The hardware class of instances. Allowed values are "STANDARD" and "PERFORMANCE". Defaults to "STANDARD". Changing this on an existing secondary worker group forces a new resource to be created.`,
+									},
+									"boot_disk_size_gb": {
+										Type:        schema.TypeInt,
+										Optional:    true,
+										Computed:    true,
+										Description: `The boot disk size in GB. Changing this on an existing secondary worker group forces a new resource to be created.`,
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -2194,6 +2598,44 @@ by Dataproc`,
 		},
 		UseJSONNumber: true,
 	}
+}
+
+// secondaryWorkerFlexibleConfigForceNew forces replacement for known
+// secondary_worker_flexible_config shape changes that Dataproc can't make in
+// place: a changed shape on an existing group, or a group added after creation
+// with a shape that differs from worker_flexible_config. Unknown and unset values
+// are left to the API.
+func secondaryWorkerFlexibleConfigForceNew(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	const sec = "cluster_config.0.secondary_worker_flexible_config"
+	oldSec, newSec := d.GetChange(sec)
+	if d.Id() == "" || len(newSec.([]interface{})) == 0 {
+		return nil
+	}
+	// The block is Optional+Computed: when it is not in config, nothing changes.
+	if raw := d.GetRawConfig(); !raw.IsNull() && raw.IsKnown() {
+		block, err := cty.GetAttrPath("cluster_config").IndexInt(0).GetAttr("secondary_worker_flexible_config").Apply(raw)
+		if err != nil || block.IsNull() || (block.IsKnown() && block.LengthInt() == 0) {
+			return nil
+		}
+	}
+	added := len(oldSec.([]interface{})) == 0
+	for _, field := range []string{"core_count", "hardware_class", "boot_disk_size_gb"} {
+		key := sec + ".0." + field
+		current, want := d.GetChange(key)
+		if added {
+			if !d.NewValueKnown("cluster_config.0.worker_flexible_config.0." + field) {
+				continue
+			}
+			current = d.Get("cluster_config.0.worker_flexible_config.0." + field)
+		}
+		if !d.NewValueKnown(key) || current == want || current == 0 || current == "" || want == 0 || want == "" {
+			continue
+		}
+		if err := d.ForceNew(key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // We need to pull metrics' schema out so we can use it to make a set hash func
@@ -2277,23 +2719,49 @@ func resourceDataprocClusterCreate(d *schema.ResourceData, meta interface{}) err
 		return errors.New("zone is mandatory when region is set to 'global'")
 	}
 
-	// Create the cluster
-	op, err := NewClient(config, userAgent).Projects.Regions.Clusters.Create(
-		project, region, cluster).Do()
+	// Create the cluster, retrying if the subnetwork is not ready yet
+	err = transport_tpg.Retry(transport_tpg.RetryOptions{
+		RetryFunc: func() error {
+			op, reqErr := NewClient(config, userAgent).Projects.Regions.Clusters.Create(
+				project, region, cluster).Do()
+			if reqErr != nil {
+				return fmt.Errorf("Error creating Dataproc cluster: %s", reqErr)
+			}
+
+			d.SetId(fmt.Sprintf("projects/%s/regions/%s/clusters/%s", project, region, cluster.ClusterName))
+
+			// Wait until it's created
+			waitErr := DataprocClusterOperationWait(config, op, "creating Dataproc cluster", userAgent, d.Timeout(schema.TimeoutCreate))
+			if waitErr != nil {
+				if isRetryable, _ := transport_tpg.IsSubnetworkNotReadyLROError(waitErr); isRetryable {
+					log.Printf("[DEBUG] Dataproc cluster %s creation failed with subnetwork not ready error, deleting partially created cluster before retrying", cluster.ClusterName)
+					delOp, delErr := NewClient(config, userAgent).Projects.Regions.Clusters.Delete(
+						project, region, cluster.ClusterName).Do()
+					if delErr == nil {
+						if delWaitErr := DataprocClusterOperationWait(config, delOp, "deleting failed Dataproc cluster", userAgent, d.Timeout(schema.TimeoutDelete)); delWaitErr != nil {
+							log.Printf("[WARN] Error waiting for deletion of failed Dataproc cluster %s: %s", cluster.ClusterName, delWaitErr)
+						} else {
+							d.SetId("")
+						}
+					} else if transport_tpg.IsGoogleApiErrorWithCode(delErr, 404) {
+						d.SetId("")
+					} else {
+						log.Printf("[WARN] Error deleting failed Dataproc cluster %s: %s", cluster.ClusterName, delErr)
+					}
+				}
+				// The resource didn't actually create
+				// Note that we do not remove the ID here - this resource tends to leave
+				// partially created clusters behind, so we'll let the next Read remove
+				// it.
+				return waitErr
+			}
+			return nil
+		},
+		Timeout:              d.Timeout(schema.TimeoutCreate),
+		ErrorRetryPredicates: []transport_tpg.RetryErrorPredicateFunc{transport_tpg.IsSubnetworkNotReadyLROError},
+	})
 	if err != nil {
-		return fmt.Errorf("Error creating Dataproc cluster: %s", err)
-	}
-
-	d.SetId(fmt.Sprintf("projects/%s/regions/%s/clusters/%s", project, region, cluster.ClusterName))
-
-	// Wait until it's created
-	waitErr := DataprocClusterOperationWait(config, op, "creating Dataproc cluster", userAgent, d.Timeout(schema.TimeoutCreate))
-	if waitErr != nil {
-		// The resource didn't actually create
-		// Note that we do not remove the ID here - this resource tends to leave
-		// partially created clusters behind, so we'll let the next Read remove
-		// it.
-		return waitErr
+		return err
 	}
 
 	log.Printf("[INFO] Dataproc cluster %s has been created", cluster.ClusterName)
@@ -2577,6 +3045,60 @@ func expandClusterConfig(d *schema.ResourceData, config *transport_tpg.Config) (
 		log.Println("[INFO] got auxiliary node group config")
 		conf.AuxiliaryNodeGroups = expandAuxiliaryNodeGroupsConfig(v)
 	}
+
+	if cfg, ok := configOptions(d, "cluster_config.0.master_flexible_config"); ok {
+		log.Println("[INFO] got master_flexible_config")
+		conf.MasterFlexibleConfig = &dataproc.FlexibleInstanceGroupConfig{}
+		if v, ok := cfg["num_instances"]; ok {
+			conf.MasterFlexibleConfig.NumInstances = int64(v.(int))
+		}
+		if v, ok := cfg["core_count"]; ok {
+			conf.MasterFlexibleConfig.CoreCount = int64(v.(int))
+		}
+		if v, ok := cfg["hardware_class"]; ok {
+			conf.MasterFlexibleConfig.HardwareClass = v.(string)
+		}
+		if v, ok := cfg["boot_disk_size_gb"]; ok {
+			conf.MasterFlexibleConfig.BootDiskSizeGb = int64(v.(int))
+		}
+	}
+
+	if cfg, ok := configOptions(d, "cluster_config.0.worker_flexible_config"); ok {
+		log.Println("[INFO] got worker_flexible_config")
+		conf.WorkerFlexibleConfig = &dataproc.FlexibleInstanceGroupConfig{}
+		if v, ok := cfg["num_instances"]; ok {
+			conf.WorkerFlexibleConfig.NumInstances = int64(v.(int))
+		}
+		if v, ok := cfg["core_count"]; ok {
+			conf.WorkerFlexibleConfig.CoreCount = int64(v.(int))
+		}
+		if v, ok := cfg["hardware_class"]; ok {
+			conf.WorkerFlexibleConfig.HardwareClass = v.(string)
+		}
+		if v, ok := cfg["boot_disk_size_gb"]; ok {
+			conf.WorkerFlexibleConfig.BootDiskSizeGb = int64(v.(int))
+		}
+	}
+
+	if cfg, ok := configOptions(d, "cluster_config.0.secondary_worker_flexible_config"); ok {
+		log.Println("[INFO] got secondary_worker_flexible_config")
+		conf.SecondaryWorkerFlexibleConfig = &dataproc.FlexibleInstanceGroupConfig{}
+		if v, ok := cfg["num_instances"]; ok {
+			conf.SecondaryWorkerFlexibleConfig.NumInstances = int64(v.(int))
+			if conf.SecondaryWorkerFlexibleConfig.NumInstances == 0 {
+				conf.SecondaryWorkerFlexibleConfig.ForceSendFields = append(conf.SecondaryWorkerFlexibleConfig.ForceSendFields, "NumInstances")
+			}
+		}
+		if v, ok := cfg["core_count"]; ok {
+			conf.SecondaryWorkerFlexibleConfig.CoreCount = int64(v.(int))
+		}
+		if v, ok := cfg["hardware_class"]; ok {
+			conf.SecondaryWorkerFlexibleConfig.HardwareClass = v.(string)
+		}
+		if v, ok := cfg["boot_disk_size_gb"]; ok {
+			conf.SecondaryWorkerFlexibleConfig.BootDiskSizeGb = int64(v.(int))
+		}
+	}
 	return conf, nil
 }
 
@@ -2634,30 +3156,7 @@ func expandNodeGroupConfig(cfg map[string]interface{}) *dataproc.InstanceGroupCo
 	}
 
 	if dc, ok := cfg["disk_config"]; ok {
-		d := dc.([]interface{})
-		if len(d) > 0 {
-			dcfg := d[0].(map[string]interface{})
-			icg.DiskConfig = &dataproc.DiskConfig{}
-
-			if v, ok := dcfg["boot_disk_size_gb"]; ok {
-				icg.DiskConfig.BootDiskSizeGb = int64(v.(int))
-			}
-			if v, ok := dcfg["num_local_ssds"]; ok {
-				icg.DiskConfig.NumLocalSsds = int64(v.(int))
-			}
-			if v, ok := dcfg["boot_disk_type"]; ok {
-				icg.DiskConfig.BootDiskType = v.(string)
-			}
-			if v, ok := dcfg["boot_disk_provisioned_iops"]; ok {
-				icg.DiskConfig.BootDiskProvisionedIops = int64(v.(int))
-			}
-			if v, ok := dcfg["boot_disk_provisioned_throughput"]; ok {
-				icg.DiskConfig.BootDiskProvisionedThroughput = int64(v.(int))
-			}
-			if v, ok := dcfg["local_ssd_interface"]; ok {
-				icg.DiskConfig.LocalSsdInterface = v.(string)
-			}
-		}
+		icg.DiskConfig = expandDiskConfig(dc)
 	}
 
 	icg.Accelerators = expandAccelerators(cfg["accelerators"].(*schema.Set).List())
@@ -2758,6 +3257,13 @@ func expandGceClusterConfig(d *schema.ResourceData, config *transport_tpg.Config
 		}
 		if v, ok := cfgCic["confidential_instance_type"]; ok && v.(string) != "" {
 			conf.ConfidentialInstanceConfig.ConfidentialInstanceType = v.(string)
+		}
+	}
+	if v, ok := d.GetOk("cluster_config.0.gce_cluster_config.0.multi_zone_config"); ok {
+		cfgMzc := v.([]interface{})[0].(map[string]interface{})
+		conf.MultiZoneConfig = &dataproc.MultiZoneConfig{}
+		if v, ok := cfgMzc["target_shape"]; ok {
+			conf.MultiZoneConfig.TargetShape = v.(string)
 		}
 	}
 	return conf, nil
@@ -2957,30 +3463,7 @@ func expandPreemptibleInstanceGroupConfig(cfg map[string]interface{}) *dataproc.
 		icg.NumInstances = int64(v.(int))
 	}
 	if dc, ok := cfg["disk_config"]; ok {
-		d := dc.([]interface{})
-		if len(d) > 0 {
-			dcfg := d[0].(map[string]interface{})
-			icg.DiskConfig = &dataproc.DiskConfig{}
-
-			if v, ok := dcfg["boot_disk_size_gb"]; ok {
-				icg.DiskConfig.BootDiskSizeGb = int64(v.(int))
-			}
-			if v, ok := dcfg["num_local_ssds"]; ok {
-				icg.DiskConfig.NumLocalSsds = int64(v.(int))
-			}
-			if v, ok := dcfg["boot_disk_type"]; ok {
-				icg.DiskConfig.BootDiskType = v.(string)
-			}
-			if v, ok := dcfg["boot_disk_provisioned_iops"]; ok {
-				icg.DiskConfig.BootDiskProvisionedIops = int64(v.(int))
-			}
-			if v, ok := dcfg["boot_disk_provisioned_throughput"]; ok {
-				icg.DiskConfig.BootDiskProvisionedThroughput = int64(v.(int))
-			}
-			if v, ok := dcfg["local_ssd_interface"]; ok {
-				icg.DiskConfig.LocalSsdInterface = v.(string)
-			}
-		}
+		icg.DiskConfig = expandDiskConfig(dc)
 	}
 
 	if ifpc, ok := cfg["instance_flexibility_policy"]; ok {
@@ -3003,7 +3486,7 @@ func expandPreemptibleInstanceGroupConfig(cfg map[string]interface{}) *dataproc.
 	return icg
 }
 
-func expandDiskConfigForInstanceSelection(v interface{}) *dataproc.DiskConfig {
+func expandDiskConfig(v interface{}) *dataproc.DiskConfig {
 	d := v.([]interface{})
 	if len(d) == 0 || d[0] == nil {
 		return nil
@@ -3029,6 +3512,9 @@ func expandDiskConfigForInstanceSelection(v interface{}) *dataproc.DiskConfig {
 	if val, ok := dcfg["local_ssd_interface"]; ok {
 		diskConfig.LocalSsdInterface = val.(string)
 	}
+	if val, ok := dcfg["attached_disk_config"]; ok {
+		diskConfig.AttachedDiskConfigs = expandAttachedDiskConfig(val.([]interface{}))
+	}
 	return diskConfig
 }
 
@@ -3049,7 +3535,7 @@ func expandInstanceSelectionList(v interface{}) []*dataproc.InstanceSelection {
 			instanceSelection.Rank = int64(x.(int))
 		}
 		if x, ok := instanceSelectionItem["disk_config"]; ok {
-			instanceSelection.DiskConfig = expandDiskConfigForInstanceSelection(x)
+			instanceSelection.DiskConfig = expandDiskConfig(x)
 		}
 		instanceSelections = append(instanceSelections, instanceSelection)
 	}
@@ -3086,31 +3572,9 @@ func expandMasterInstanceGroupConfig(cfg map[string]interface{}) *dataproc.Insta
 	}
 
 	if dc, ok := cfg["disk_config"]; ok {
-		d := dc.([]interface{})
-		if len(d) > 0 {
-			dcfg := d[0].(map[string]interface{})
-			icg.DiskConfig = &dataproc.DiskConfig{}
-
-			if v, ok := dcfg["boot_disk_size_gb"]; ok {
-				icg.DiskConfig.BootDiskSizeGb = int64(v.(int))
-			}
-			if v, ok := dcfg["num_local_ssds"]; ok {
-				icg.DiskConfig.NumLocalSsds = int64(v.(int))
-			}
-			if v, ok := dcfg["boot_disk_type"]; ok {
-				icg.DiskConfig.BootDiskType = v.(string)
-			}
-			if v, ok := dcfg["boot_disk_provisioned_iops"]; ok {
-				icg.DiskConfig.BootDiskProvisionedIops = int64(v.(int))
-			}
-			if v, ok := dcfg["boot_disk_provisioned_throughput"]; ok {
-				icg.DiskConfig.BootDiskProvisionedThroughput = int64(v.(int))
-			}
-			if v, ok := dcfg["local_ssd_interface"]; ok {
-				icg.DiskConfig.LocalSsdInterface = v.(string)
-			}
-		}
+		icg.DiskConfig = expandDiskConfig(dc)
 	}
+
 	if ifpc, ok := cfg["instance_flexibility_policy"]; ok {
 		ifps := ifpc.([]interface{})
 		if len(ifps) > 0 {
@@ -3145,30 +3609,7 @@ func expandWorkerInstanceGroupConfig(cfg map[string]interface{}) *dataproc.Insta
 	}
 
 	if dc, ok := cfg["disk_config"]; ok {
-		d := dc.([]interface{})
-		if len(d) > 0 {
-			dcfg := d[0].(map[string]interface{})
-			icg.DiskConfig = &dataproc.DiskConfig{}
-
-			if v, ok := dcfg["boot_disk_size_gb"]; ok {
-				icg.DiskConfig.BootDiskSizeGb = int64(v.(int))
-			}
-			if v, ok := dcfg["num_local_ssds"]; ok {
-				icg.DiskConfig.NumLocalSsds = int64(v.(int))
-			}
-			if v, ok := dcfg["boot_disk_type"]; ok {
-				icg.DiskConfig.BootDiskType = v.(string)
-			}
-			if v, ok := dcfg["boot_disk_provisioned_iops"]; ok {
-				icg.DiskConfig.BootDiskProvisionedIops = int64(v.(int))
-			}
-			if v, ok := dcfg["boot_disk_provisioned_throughput"]; ok {
-				icg.DiskConfig.BootDiskProvisionedThroughput = int64(v.(int))
-			}
-			if v, ok := dcfg["local_ssd_interface"]; ok {
-				icg.DiskConfig.LocalSsdInterface = v.(string)
-			}
-		}
+		icg.DiskConfig = expandDiskConfig(dc)
 	}
 	if ifpc, ok := cfg["instance_flexibility_policy"]; ok {
 		ifps := ifpc.([]interface{})
@@ -3256,6 +3697,51 @@ func resourceDataprocClusterUpdate(d *schema.ResourceData, meta interface{}) err
 		updMask = append(updMask, "config.secondary_worker_config.num_instances")
 	}
 
+	if d.HasChange("cluster_config.0.worker_flexible_config.0.num_instances") {
+		desiredNumWorks := d.Get("cluster_config.0.worker_flexible_config.0.num_instances").(int)
+		cluster.Config.WorkerFlexibleConfig = &dataproc.FlexibleInstanceGroupConfig{
+			NumInstances:    int64(desiredNumWorks),
+			ForceSendFields: []string{"NumInstances"},
+		}
+
+		updMask = append(updMask, "config.worker_flexible_config.num_instances")
+	}
+
+	if d.HasChange("cluster_config.0.secondary_worker_flexible_config") {
+		const secPrefix = "cluster_config.0.secondary_worker_flexible_config.0."
+		sec := &dataproc.FlexibleInstanceGroupConfig{
+			NumInstances:    int64(d.Get(secPrefix + "num_instances").(int)),
+			ForceSendFields: []string{"NumInstances"},
+		}
+		updMask = append(updMask, "config.secondary_worker_flexible_config.num_instances")
+
+		// Dataproc only updates num_instances in place, and a secondary group added
+		// after creation gets the worker_flexible_config shape. Send any shape field
+		// that differs from that so the API rejects the update rather than ignoring it.
+		oldSec, _ := d.GetChange("cluster_config.0.secondary_worker_flexible_config")
+		current := func(field string) interface{} {
+			if len(oldSec.([]interface{})) == 0 {
+				return d.Get("cluster_config.0.worker_flexible_config.0." + field)
+			}
+			old, _ := d.GetChange(secPrefix + field)
+			return old
+		}
+		if v := d.Get(secPrefix + "core_count").(int); v != current("core_count").(int) {
+			sec.CoreCount = int64(v)
+			updMask = append(updMask, "config.secondary_worker_flexible_config.core_count")
+		}
+		if v := d.Get(secPrefix + "hardware_class").(string); v != current("hardware_class").(string) {
+			sec.HardwareClass = v
+			updMask = append(updMask, "config.secondary_worker_flexible_config.hardware_class")
+		}
+		// boot_disk_size_gb is Optional+Computed: 0 means unset.
+		if v := d.Get(secPrefix + "boot_disk_size_gb").(int); v != 0 && v != current("boot_disk_size_gb").(int) {
+			sec.BootDiskSizeGb = int64(v)
+			updMask = append(updMask, "config.secondary_worker_flexible_config.boot_disk_size_gb")
+		}
+		cluster.Config.SecondaryWorkerFlexibleConfig = sec
+	}
+
 	if d.HasChange("cluster_config.0.autoscaling_config") {
 		desiredPolicy := d.Get("cluster_config.0.autoscaling_config.0.policy_uri").(string)
 		cluster.Config.AutoscalingConfig = &dataproc.AutoscalingConfig{
@@ -3318,6 +3804,8 @@ func resourceDataprocClusterUpdate(d *schema.ResourceData, meta interface{}) err
 		patch.UpdateMask(strings.Join(updMask, ","))
 		op, err := patch.Do()
 		if err != nil {
+			// Nothing was changed, so keep the prior state instead of the planned values.
+			d.Partial(true)
 			return err
 		}
 
@@ -3542,11 +4030,59 @@ func flattenClusterConfig(d *schema.ResourceData, cfg *dataproc.ClusterConfig) (
 		"encryption_config":         flattenEncryptionConfig(d, cfg.EncryptionConfig),
 		"autoscaling_config":        flattenAutoscalingConfig(d, cfg.AutoscalingConfig),
 		"security_config":           flattenSecurityConfig(d, cfg.SecurityConfig),
-		"preemptible_worker_config": flattenPreemptibleInstanceGroupConfig(d, cfg.SecondaryWorkerConfig),
+		"preemptible_worker_config": flattenPreemptibleInstanceGroupConfig(d, cfg.SecondaryWorkerConfig, cfg.SecondaryWorkerFlexibleConfig),
 		"metastore_config":          flattenMetastoreConfig(d, cfg.MetastoreConfig),
 		"lifecycle_config":          flattenLifecycleConfig(d, cfg.LifecycleConfig),
 		"endpoint_config":           flattenEndpointConfig(d, cfg.EndpointConfig),
 		"dataproc_metric_config":    flattenDataprocMetricConfig(d, cfg.DataprocMetricConfig),
+	}
+
+	if cfg.MasterFlexibleConfig != nil {
+		data["master_flexible_config"] = []map[string]interface{}{
+			{
+				"num_instances":     cfg.MasterFlexibleConfig.NumInstances,
+				"core_count":        cfg.MasterFlexibleConfig.CoreCount,
+				"hardware_class":    cfg.MasterFlexibleConfig.HardwareClass,
+				"boot_disk_size_gb": cfg.MasterFlexibleConfig.BootDiskSizeGb,
+			},
+		}
+	}
+
+	if cfg.WorkerFlexibleConfig != nil {
+		data["worker_flexible_config"] = []map[string]interface{}{
+			{
+				"num_instances":     cfg.WorkerFlexibleConfig.NumInstances,
+				"core_count":        cfg.WorkerFlexibleConfig.CoreCount,
+				"hardware_class":    cfg.WorkerFlexibleConfig.HardwareClass,
+				"boot_disk_size_gb": cfg.WorkerFlexibleConfig.BootDiskSizeGb,
+			},
+		}
+	}
+
+	if cfg.SecondaryWorkerFlexibleConfig != nil {
+		bootDiskSizeGb := cfg.SecondaryWorkerFlexibleConfig.BootDiskSizeGb
+		// For a secondary group added after creation, the API reports the boot disk
+		// size only in secondaryWorkerConfig.diskConfig.
+		if bootDiskSizeGb == 0 && cfg.SecondaryWorkerConfig != nil && cfg.SecondaryWorkerConfig.DiskConfig != nil {
+			bootDiskSizeGb = cfg.SecondaryWorkerConfig.DiskConfig.BootDiskSizeGb
+		}
+		data["secondary_worker_flexible_config"] = []map[string]interface{}{
+			{
+				"num_instances":     cfg.SecondaryWorkerFlexibleConfig.NumInstances,
+				"core_count":        cfg.SecondaryWorkerFlexibleConfig.CoreCount,
+				"hardware_class":    cfg.SecondaryWorkerFlexibleConfig.HardwareClass,
+				"boot_disk_size_gb": bootDiskSizeGb,
+			},
+		}
+	} else if old, ok := d.Get("cluster_config.0.secondary_worker_flexible_config").([]interface{}); ok && len(old) > 0 && old[0] != nil {
+		// A secondary group added after creation is omitted from the API response
+		// once it is scaled to 0. Keep the block in state with 0 instances.
+		sec := map[string]interface{}{}
+		for k, v := range old[0].(map[string]interface{}) {
+			sec[k] = v
+		}
+		sec["num_instances"] = 0
+		data["secondary_worker_flexible_config"] = []interface{}{sec}
 	}
 
 	if len(cfg.InitializationActions) > 0 {
@@ -3781,7 +4317,6 @@ func flatternNodeGroup(ng *dataproc.NodeGroup) []map[string]interface{} {
 }
 
 func flattenNodeGroupConfig(icg *dataproc.InstanceGroupConfig) []map[string]interface{} {
-	disk := map[string]interface{}{}
 	data := map[string]interface{}{}
 
 	if icg != nil {
@@ -3790,22 +4325,11 @@ func flattenNodeGroupConfig(icg *dataproc.InstanceGroupConfig) []map[string]inte
 		data["min_cpu_platform"] = icg.MinCpuPlatform
 		data["instance_names"] = icg.InstanceNames
 		if icg.DiskConfig != nil {
-			disk["boot_disk_size_gb"] = icg.DiskConfig.BootDiskSizeGb
-			disk["num_local_ssds"] = icg.DiskConfig.NumLocalSsds
-			disk["boot_disk_type"] = icg.DiskConfig.BootDiskType
-			if icg.DiskConfig.BootDiskProvisionedIops > 0 {
-				disk["boot_disk_provisioned_iops"] = icg.DiskConfig.BootDiskProvisionedIops
-			}
-			if icg.DiskConfig.BootDiskProvisionedThroughput > 0 {
-				disk["boot_disk_provisioned_throughput"] = icg.DiskConfig.BootDiskProvisionedThroughput
-			}
-			disk["local_ssd_interface"] = icg.DiskConfig.LocalSsdInterface
+			data["disk_config"] = flattenDiskConfig(icg.DiskConfig)
 		}
 		data["accelerators"] = flattenAccelerators(icg.Accelerators)
-
 	}
 
-	data["disk_config"] = []map[string]interface{}{disk}
 	return []map[string]interface{}{data}
 }
 
@@ -3814,13 +4338,27 @@ func flattenGceClusterConfig(d *schema.ResourceData, gcc *dataproc.GceClusterCon
 		return []map[string]interface{}{}
 	}
 
+	resourceManagerTags := gcc.ResourceManagerTags
+	if v, ok := d.GetOk("cluster_config.0.gce_cluster_config.0.resource_manager_tags"); ok {
+		cfgTags := v.(map[string]interface{})
+		if len(cfgTags) > 0 && resourceManagerTags != nil {
+			filteredTags := make(map[string]string, len(cfgTags))
+			for k, val := range resourceManagerTags {
+				if _, exists := cfgTags[k]; exists {
+					filteredTags[k] = val
+				}
+			}
+			resourceManagerTags = filteredTags
+		}
+	}
+
 	gceConfig := map[string]interface{}{
 		"tags":                  schema.NewSet(schema.HashString, tpgresource.ConvertStringArrToInterface(gcc.Tags)),
 		"service_account":       gcc.ServiceAccount,
 		"zone":                  tpgresource.GetResourceNameFromSelfLink(gcc.ZoneUri),
 		"internal_ip_only":      gcc.InternalIpOnly,
 		"metadata":              gcc.Metadata,
-		"resource_manager_tags": gcc.ResourceManagerTags,
+		"resource_manager_tags": resourceManagerTags,
 	}
 
 	if gcc.NetworkUri != "" {
@@ -3858,10 +4396,27 @@ func flattenGceClusterConfig(d *schema.ResourceData, gcc *dataproc.GceClusterCon
 		}
 	}
 	if gcc.ConfidentialInstanceConfig != nil {
+		enableConfidentialCompute := gcc.ConfidentialInstanceConfig.EnableConfidentialCompute
+		confidentialInstanceType := gcc.ConfidentialInstanceConfig.ConfidentialInstanceType
+		if !enableConfidentialCompute && confidentialInstanceType != "" {
+			if v, ok := d.GetOk("cluster_config.0.gce_cluster_config.0.confidential_instance_config.0.enable_confidential_compute"); ok && v.(bool) {
+				enableConfidentialCompute = true
+				if _, ok := d.GetOk("cluster_config.0.gce_cluster_config.0.confidential_instance_config.0.confidential_instance_type"); !ok {
+					confidentialInstanceType = ""
+				}
+			}
+		}
 		gceConfig["confidential_instance_config"] = []map[string]interface{}{
 			{
-				"enable_confidential_compute": gcc.ConfidentialInstanceConfig.EnableConfidentialCompute,
-				"confidential_instance_type":  gcc.ConfidentialInstanceConfig.ConfidentialInstanceType,
+				"enable_confidential_compute": enableConfidentialCompute,
+				"confidential_instance_type":  confidentialInstanceType,
+			},
+		}
+	}
+	if gcc.MultiZoneConfig != nil {
+		gceConfig["multi_zone_config"] = []map[string]interface{}{
+			{
+				"target_shape": gcc.MultiZoneConfig.TargetShape,
 			},
 		}
 	}
@@ -3869,14 +4424,18 @@ func flattenGceClusterConfig(d *schema.ResourceData, gcc *dataproc.GceClusterCon
 	return []map[string]interface{}{gceConfig}
 }
 
-func flattenPreemptibleInstanceGroupConfig(d *schema.ResourceData, icg *dataproc.InstanceGroupConfig) []map[string]interface{} {
+func flattenPreemptibleInstanceGroupConfig(d *schema.ResourceData, icg *dataproc.InstanceGroupConfig, flexCfg *dataproc.FlexibleInstanceGroupConfig) []map[string]interface{} {
 	// if num_instances is 0, icg will always be returned nil. This means the
 	// server has discarded diskconfig etc. However, the only way to remove the
 	// preemptible group is to set the size to 0, because it's O+C. Many users
 	// won't remove the rest of the config (eg disk config). Therefore, we need to
 	// preserve the other set fields by using the old state to stop users from
 	// getting a diff.
-	if icg == nil {
+	// In High Obtainability (HO) mode (when secondary_worker_flexible_config is
+	// used), preemptible_worker_config cannot be configured in HCL and is only
+	// populated as a computed reflection of the resolved secondary worker group.
+	// Do not copy stale state when secondary_worker_flexible_config scales to 0.
+	if icg == nil && flexCfg == nil {
 		icgSchema := d.Get("cluster_config.0.preemptible_worker_config")
 		log.Printf("[DEBUG] state of preemptible is %#v", icgSchema)
 		if v, ok := icgSchema.([]interface{}); ok && len(v) > 0 {
@@ -3886,7 +4445,6 @@ func flattenPreemptibleInstanceGroupConfig(d *schema.ResourceData, icg *dataproc
 		}
 	}
 
-	disk := map[string]interface{}{}
 	instanceFlexibilityPolicy := map[string]interface{}{}
 	data := map[string]interface{}{}
 
@@ -3895,16 +4453,7 @@ func flattenPreemptibleInstanceGroupConfig(d *schema.ResourceData, icg *dataproc
 		data["instance_names"] = icg.InstanceNames
 		data["preemptibility"] = icg.Preemptibility
 		if icg.DiskConfig != nil {
-			disk["boot_disk_size_gb"] = icg.DiskConfig.BootDiskSizeGb
-			disk["num_local_ssds"] = icg.DiskConfig.NumLocalSsds
-			disk["boot_disk_type"] = icg.DiskConfig.BootDiskType
-			if icg.DiskConfig.BootDiskProvisionedIops > 0 {
-				disk["boot_disk_provisioned_iops"] = icg.DiskConfig.BootDiskProvisionedIops
-			}
-			if icg.DiskConfig.BootDiskProvisionedThroughput > 0 {
-				disk["boot_disk_provisioned_throughput"] = icg.DiskConfig.BootDiskProvisionedThroughput
-			}
-			disk["local_ssd_interface"] = icg.DiskConfig.LocalSsdInterface
+			data["disk_config"] = flattenDiskConfig(icg.DiskConfig)
 		}
 		if icg.InstanceFlexibilityPolicy != nil {
 			if icg.InstanceFlexibilityPolicy.InstanceSelectionList != nil {
@@ -3917,12 +4466,11 @@ func flattenPreemptibleInstanceGroupConfig(d *schema.ResourceData, icg *dataproc
 		}
 	}
 
-	data["disk_config"] = []map[string]interface{}{disk}
 	data["instance_flexibility_policy"] = []map[string]interface{}{instanceFlexibilityPolicy}
 	return []map[string]interface{}{data}
 }
 
-func flattenDiskConfigForInstanceSelection(dc *dataproc.DiskConfig) []map[string]interface{} {
+func flattenDiskConfig(dc *dataproc.DiskConfig) []map[string]interface{} {
 	if dc == nil {
 		return nil
 	}
@@ -3937,6 +4485,9 @@ func flattenDiskConfigForInstanceSelection(dc *dataproc.DiskConfig) []map[string
 		disk["boot_disk_provisioned_throughput"] = dc.BootDiskProvisionedThroughput
 	}
 	disk["local_ssd_interface"] = dc.LocalSsdInterface
+	if v := flattenAttachedDiskConfig(dc.AttachedDiskConfigs); v != nil {
+		disk["attached_disk_config"] = v
+	}
 
 	return []map[string]interface{}{disk}
 }
@@ -3951,7 +4502,7 @@ func flattenInstanceSelectionList(is []*dataproc.InstanceSelection) []map[string
 		}
 		instanceSelection["rank"] = v.Rank
 		if v.DiskConfig != nil {
-			instanceSelection["disk_config"] = flattenDiskConfigForInstanceSelection(v.DiskConfig)
+			instanceSelection["disk_config"] = flattenDiskConfig(v.DiskConfig)
 		}
 		instanceSelections = append(instanceSelections, instanceSelection)
 	}
@@ -3981,7 +4532,6 @@ func flattenProvisioningModelMix(pmm *dataproc.ProvisioningModelMix) []map[strin
 }
 
 func flattenMasterInstanceGroupConfig(d *schema.ResourceData, icg *dataproc.InstanceGroupConfig) []map[string]interface{} {
-	disk := map[string]interface{}{}
 	instanceFlexibilityPolicy := map[string]interface{}{}
 	data := map[string]interface{}{}
 
@@ -3992,16 +4542,7 @@ func flattenMasterInstanceGroupConfig(d *schema.ResourceData, icg *dataproc.Inst
 		data["image_uri"] = icg.ImageUri
 		data["instance_names"] = icg.InstanceNames
 		if icg.DiskConfig != nil {
-			disk["boot_disk_size_gb"] = icg.DiskConfig.BootDiskSizeGb
-			disk["num_local_ssds"] = icg.DiskConfig.NumLocalSsds
-			disk["boot_disk_type"] = icg.DiskConfig.BootDiskType
-			if icg.DiskConfig.BootDiskProvisionedIops > 0 {
-				disk["boot_disk_provisioned_iops"] = icg.DiskConfig.BootDiskProvisionedIops
-			}
-			if icg.DiskConfig.BootDiskProvisionedThroughput > 0 {
-				disk["boot_disk_provisioned_throughput"] = icg.DiskConfig.BootDiskProvisionedThroughput
-			}
-			disk["local_ssd_interface"] = icg.DiskConfig.LocalSsdInterface
+			data["disk_config"] = flattenDiskConfig(icg.DiskConfig)
 		}
 		if icg.InstanceFlexibilityPolicy != nil {
 			if icg.InstanceFlexibilityPolicy.InstanceSelectionList != nil {
@@ -4012,13 +4553,11 @@ func flattenMasterInstanceGroupConfig(d *schema.ResourceData, icg *dataproc.Inst
 		data["accelerators"] = flattenAccelerators(icg.Accelerators)
 	}
 
-	data["disk_config"] = []map[string]interface{}{disk}
 	data["instance_flexibility_policy"] = []map[string]interface{}{instanceFlexibilityPolicy}
 	return []map[string]interface{}{data}
 }
 
 func flattenWorkerInstanceGroupConfig(d *schema.ResourceData, icg *dataproc.InstanceGroupConfig) []map[string]interface{} {
-	disk := map[string]interface{}{}
 	instanceFlexibilityPolicy := map[string]interface{}{}
 	data := map[string]interface{}{}
 
@@ -4030,16 +4569,7 @@ func flattenWorkerInstanceGroupConfig(d *schema.ResourceData, icg *dataproc.Inst
 		data["image_uri"] = icg.ImageUri
 		data["instance_names"] = icg.InstanceNames
 		if icg.DiskConfig != nil {
-			disk["boot_disk_size_gb"] = icg.DiskConfig.BootDiskSizeGb
-			disk["num_local_ssds"] = icg.DiskConfig.NumLocalSsds
-			disk["boot_disk_type"] = icg.DiskConfig.BootDiskType
-			if icg.DiskConfig.BootDiskProvisionedIops > 0 {
-				disk["boot_disk_provisioned_iops"] = icg.DiskConfig.BootDiskProvisionedIops
-			}
-			if icg.DiskConfig.BootDiskProvisionedThroughput > 0 {
-				disk["boot_disk_provisioned_throughput"] = icg.DiskConfig.BootDiskProvisionedThroughput
-			}
-			disk["local_ssd_interface"] = icg.DiskConfig.LocalSsdInterface
+			data["disk_config"] = flattenDiskConfig(icg.DiskConfig)
 		}
 		if icg.InstanceFlexibilityPolicy != nil {
 			if icg.InstanceFlexibilityPolicy.InstanceSelectionList != nil {
@@ -4050,7 +4580,6 @@ func flattenWorkerInstanceGroupConfig(d *schema.ResourceData, icg *dataproc.Inst
 		data["accelerators"] = flattenAccelerators(icg.Accelerators)
 	}
 
-	data["disk_config"] = []map[string]interface{}{disk}
 	data["instance_flexibility_policy"] = []map[string]interface{}{instanceFlexibilityPolicy}
 	return []map[string]interface{}{data}
 }
@@ -4175,4 +4704,59 @@ func init() {
 		Type:        registry.SchemaTypeResource,
 		Schema:      ResourceDataprocCluster(),
 	}.Register()
+}
+
+func expandAttachedDiskConfig(l []interface{}) []*dataproc.AttachedDiskConfig {
+	if len(l) == 0 || l[0] == nil {
+		return nil
+	}
+	var res []*dataproc.AttachedDiskConfig
+	for _, raw := range l {
+		if raw == nil {
+			continue
+		}
+		rawMap := raw.(map[string]interface{})
+		c := &dataproc.AttachedDiskConfig{}
+		if v, ok := rawMap["disk_size_gb"]; ok {
+			c.DiskSizeGb = int64(v.(int))
+		}
+		if v, ok := rawMap["disk_type"]; ok {
+			c.DiskType = v.(string)
+		}
+		if v, ok := rawMap["type"]; ok {
+			c.Type = v.(string)
+		}
+		if v, ok := rawMap["provisioned_iops"]; ok && v.(int) > 0 {
+			c.ProvisionedIops = int64(v.(int))
+		}
+		if v, ok := rawMap["provisioned_throughput"]; ok && v.(int) > 0 {
+			c.ProvisionedThroughput = int64(v.(int))
+		}
+		res = append(res, c)
+	}
+	return res
+}
+
+func flattenAttachedDiskConfig(configs []*dataproc.AttachedDiskConfig) []map[string]interface{} {
+	if len(configs) == 0 {
+		return nil
+	}
+	var res []map[string]interface{}
+	for _, c := range configs {
+		if c == nil {
+			continue
+		}
+		m := make(map[string]interface{})
+		m["disk_size_gb"] = c.DiskSizeGb
+		m["disk_type"] = c.DiskType
+		m["type"] = c.Type
+		if c.ProvisionedIops > 0 {
+			m["provisioned_iops"] = c.ProvisionedIops
+		}
+		if c.ProvisionedThroughput > 0 {
+			m["provisioned_throughput"] = c.ProvisionedThroughput
+		}
+		res = append(res, m)
+	}
+	return res
 }

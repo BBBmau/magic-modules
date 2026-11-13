@@ -598,6 +598,20 @@ block supports:
   /20 IPv4 cidr range that will be used by the environment's internal
   components. Cannot be updated.
 
+* `traffic_routing_config` -
+  (Optional, [Beta](../guides/provider_versions.html.markdown),
+  Managed Airflow (Gen 3) only)
+  Traffic routing configuration for Cloud Composer environment.
+  Structure is [documented below](#nested_traffic_routing_config).
+
+
+<a name="nested_traffic_routing_config"></a>The `traffic_routing_config` block supports:
+
+* `cloud_run_functions_routing` -
+  (Optional, [Beta](../guides/provider_versions.html.markdown))
+  Traffic routing mode for Cloud Run functions. Possible values: `DIRECT`, `VIA_NETWORK_ATTACHMENT`.
+  If unspecified, defaults to `DIRECT`.
+
 <a name="nested_software_config_gen_3"></a>The `software_config` block supports:
 
 * `airflow_config_overrides` -
@@ -1130,9 +1144,10 @@ block supports:
   (Required)
   Whether or not Cloud Data Lineage integration is enabled.
 
-<a name="nested_private_environment_config_gen_2"></a>See [documentation](https://docs.cloud.google.com/composer/docs/composer-2/configure-private-ip) for
+See [documentation](https://docs.cloud.google.com/composer/docs/composer-2/configure-private-ip) for
 setting up Private IP environments.
-The `private_environment_config` block supports:
+
+<a name="nested_private_environment_config_gen_2"></a>The `private_environment_config` block supports:
 
 * `connection_type` -
   (Optional, Managed Airflow (Gen 2) only)
@@ -1159,7 +1174,7 @@ The `private_environment_config` block supports:
   The CIDR block from which IP range in the tenant project will be reserved for
   Cloud SQL. Needs to be disjoint from `web_server_ipv4_cidr_block`
 
-* `cloud_composer_network_ipv4_cidr_block"` -
+* `cloud_composer_network_ipv4_cidr_block` -
   (Optional, Managed Airflow (Gen 2) only)
 
   The CIDR block from which IP range for Managed Airflow Network in the tenant
@@ -1752,7 +1767,7 @@ block supports:
   Optional. Cloud SQL machine type used by Airflow database. It has to be one
   of: db-n1-standard-2, db-n1-standard-4, db-n1-standard-8 or db-n1-standard-16.
 
-* `Zone` -
+* `zone` -
   (Optional)
   Preferred Cloud SQL database zone.
 

@@ -13,6 +13,9 @@ service/agentidentity:
 service/agentregistry:
   resources:
   - google_agent_registry_.*
+service/aiplatform-agent-anomaly-detection:
+  resources:
+  - google_vertex_ai_agent_anomaly_detection_.*
 service/aiplatform-agent-engine:
   resources:
   - google_vertex_ai_reasoning_engine.*
@@ -22,6 +25,9 @@ service/aiplatform-colab-enterprise:
 service/aiplatform-dataset:
   resources:
   - google_vertex_ai_dataset
+service/aiplatform-evaluation:
+  resources:
+  - google_vertex_ai_evaluation_.*
 service/aiplatform-featurestore:
   resources:
   - google_vertex_ai_featurestore.*
@@ -33,17 +39,16 @@ service/aiplatform-matching-engine:
 service/aiplatform-metadata:
   resources:
   - google_vertex_ai_metadata_store
-  - google_vertex_ai_schedule
 service/aiplatform-prediction:
   resources:
   - google_vertex_ai_cache_config
   - google_vertex_ai_endpoint
   - google_vertex_ai_deployment_resource_pool
-  - google_ml_engine_model
   - google_vertex_ai_endpoint_with_model_garden_deployment
   - google_vertex_ai_model_garden_enable_model
 service/aiplatform-rag-engine:
   resources:
+  - google_vertex_ai_rag_corpus
   - google_vertex_ai_rag_engine_config
 service/aiplatform-semantic-governance:
   resources:
@@ -179,6 +184,9 @@ service/cloudscheduler:
 service/cloudsecuritycompliance:
   resources:
   - google_cloud_security_compliance_.*
+service/cloudsupport:
+  resources:
+  - google_cloud_support_.*
 service/cloudtasks:
   resources:
   - google_cloud_tasks_.*
@@ -196,6 +204,7 @@ service/compute-commitment:
   resources:
   - google_compute_region_commitment.*
 service/compute-health:
+  team: compute-health
   resources:
   - google_compute_health_check
   - google_compute_http_health_check
@@ -330,6 +339,9 @@ service/compute-vpn:
   - google_compute_ha_vpn_gateway
   - google_compute_external_vpn_gateway
   - google_compute_vpn_.*
+service/config:
+  resources:
+  - google_config_deployment
 service/contactcenterinsights:
   resources:
   - google_contact_center_insights_.*
@@ -385,12 +397,16 @@ service/deploymentmanager:
   resources:
   - google_deployment_manager_.*
   - google_runtimeconfig_.*
+service/designcenter:
+  resources:
+  - google_design_center_.*
 service/developerconnect:
   resources:
   - google_developer_connect_.*
   - google_cloudbuildv2_.*
 service/dialogflow:
   resources:
+  - google_dialogflow_companion_agent
   - google_dialogflow_conversation_profile
   - google_dialogflow_sip_trunk
 service/dialogflow-cx:
@@ -403,6 +419,7 @@ service/dialogflow-cx:
   - google_dialogflow_fulfillment
   - google_dialogflow_generator
   - google_dialogflow_intent
+  - google_dialogflow_tool
   - google_dialogflow_version
 service/discoveryengine:
   resources:
@@ -448,6 +465,7 @@ service/firebase:
   - google_firebase_storage.*
   - google_firebase_web.*
   - google_firebaserules_.*
+  - google_firebase_remote_config_.*
 service/firebaseailogic:
   team: firebase-terraform
   resources:
@@ -478,7 +496,12 @@ service/gce-rollout-plan:
   - google_compute_rollout_plan
 service/gemini:
   resources:
-  - google_gemini_.*
+  - google_gemini_code_repository_index
+  - google_gemini_repository_group.*
+  - google_gemini_.*_setting(_binding)?
+service/geminidataanalytics:
+  resources:
+  - google_gemini_data_analytics_.*
 service/gkebackup:
   resources:
   - google_gke_backup_.*
@@ -578,6 +601,7 @@ service/monitoring-alerting:
   resources:
   - google_monitoring_notification_channel
   - google_monitoring_alert_policy
+  - google_monitoring_snooze
 service/monitoring-metrics:
   resources:
   - google_monitoring_metric_descriptor
@@ -658,6 +682,7 @@ service/networksecurity-swp:
 service/networkservices-agent-gateway:
   resources:
   - google_network_services_agent_gateway
+  - google_network_services_agent_connectivity_template
 service/networkservices-media-cdn:
   resources:
   - google_network_services_edge_cache_.*
@@ -677,6 +702,7 @@ service/networkservices-traffic-director:
   - google_network_services_mesh
   - google_network_services_service_binding
   - google_network_services_tcp_route
+  - google_network_services_telemetry_policy
   - google_network_services_tls_route
 service/notebooks:
   resources:

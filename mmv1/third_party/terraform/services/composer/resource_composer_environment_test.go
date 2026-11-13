@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-provider-google/google/services/kms"
 	"github.com/hashicorp/terraform-provider-google/google/services/resourcemanager"
 	_ "github.com/hashicorp/terraform-provider-google/google/services/storage"
+	transport_tpg "github.com/hashicorp/terraform-provider-google/google/transport"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
@@ -1127,6 +1129,48 @@ func TestAccComposerEnvironmentComposer3_usesUnsupportedField_expectError(t *tes
 	})
 }
 
+func TestAccComposerEnvironmentComposer3_trafficRoutingConfig(t *testing.T) {
+	t.Parallel()
+
+	if !strings.Contains(reflect.TypeOf(transport_tpg.Config{}).PkgPath(), "google-beta") {
+		t.Skip("skipping beta-only test in GA provider")
+	}
+
+	envName := fmt.Sprintf("%s-%d", testComposerEnvironmentPrefix, acctest.RandInt(t))
+	network := fmt.Sprintf("%s-%d", testComposerNetworkPrefix, acctest.RandInt(t))
+	subnetwork := network + "-1"
+	serviceAccount := fmt.Sprintf("tf-test-%d", acctest.RandInt(t))
+
+	acctest.VcrTest(t, resource.TestCase{
+		PreCheck:                 func() { acctest.AccTestPreCheck(t) },
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(t),
+		CheckDestroy:             testAccComposerEnvironmentDestroyProducer(t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccComposerEnvironmentComposer3_trafficRouting(envName, network, subnetwork, serviceAccount, "DIRECT"),
+			},
+			{
+				Config: testAccComposerEnvironmentComposer3_trafficRouting(envName, network, subnetwork, serviceAccount, "VIA_NETWORK_ATTACHMENT"),
+			},
+			{
+				ResourceName:      "google_composer_environment.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			// This is a terrible clean-up step in order to get destroy to succeed,
+			// due to dangling firewall rules left by the Composer Environment blocking network deletion.
+			// TODO: Remove this check if firewall rules bug gets fixed by Composer.
+
+			{
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
+				Config:             testAccComposerEnvironmentComposer3_trafficRouting(envName, network, subnetwork, serviceAccount, "VIA_NETWORK_ATTACHMENT"),
+				Check:              testAccCheckClearComposerEnvironmentFirewalls(t, network),
+			},
+		},
+	})
+}
+
 func testAccComposerEnvironment_customBucket(bucketName, envName, network, subnetwork, serviceAccount string) string {
 	return fmt.Sprintf(`
 data "google_project" "project" {}
@@ -1647,7 +1691,7 @@ resource "google_composer_environment" "test" {
     }
 
     software_config {
-      image_version = "composer-2.13.0-airflow-2.10.5"
+      image_version = "composer-2.17.10-airflow-2.10.5"
     }
   }
   depends_on = [google_project_iam_member.composer-worker]
@@ -1696,7 +1740,7 @@ resource "google_composer_environment" "test" {
     }
 
     software_config {
-      image_version = "composer-2.16.11-airflow-2.11.1"
+      image_version = "composer-2.17.10-airflow-2.11.1"
     }
   }
   depends_on = [google_project_iam_member.composer-worker]
@@ -2947,6 +2991,56 @@ resource "google_compute_subnetwork" "test" {
 `, serviceAccount, name, network, subnetwork)
 }
 
+func testAccComposerEnvironmentComposer3_trafficRouting(name, network, subnetwork, serviceAccount, routingMode string) string {
+	return fmt.Sprintf(`
+data "google_project" "project" {}
+
+resource "google_service_account" "test" {
+  account_id   = "%s"
+  display_name = "Test Service Account for Composer Environment"
+}
+resource "google_project_iam_member" "composer-worker" {
+  project = data.google_project.project.project_id
+  role    = "roles/composer.worker"
+  member  = "serviceAccount:${google_service_account.test.email}"
+}
+
+resource "google_composer_environment" "test" {
+  name   = "%s"
+  region = "us-central1"
+  config {
+    node_config {
+      network    = google_compute_network.test.id
+      subnetwork = google_compute_subnetwork.test.id
+      service_account = google_service_account.test.name
+      traffic_routing_config {
+        cloud_run_functions_routing = "%s"
+      }
+    }
+    software_config {
+      image_version = "composer-3-airflow-2"
+    }
+    enable_private_environment = true
+  }
+  depends_on = [google_project_iam_member.composer-worker]
+}
+
+// use a separate network to avoid conflicts with other tests running in parallel
+// that use the default network/subnet
+resource "google_compute_network" "test" {
+  name                    = "%s"
+  auto_create_subnetworks = false
+}
+
+resource "google_compute_subnetwork" "test" {
+  name          = "%s"
+  ip_cidr_range = "10.2.0.0/16"
+  region        = "us-central1"
+  network       = google_compute_network.test.self_link
+}
+`, serviceAccount, name, routingMode, network, subnetwork)
+}
+
 // WARNING: This is not actually a check and is a terrible clean-up step because Composer Environments
 // have a bug that hasn't been fixed. Composer will add firewalls to non-default networks for environments
 // but will not remove them when the Environment is deleted.
@@ -2956,32 +3050,60 @@ func testAccCheckClearComposerEnvironmentFirewalls(t *testing.T, networkName str
 	return func(s *terraform.State) error {
 		config := acctest.GoogleProviderConfig(t)
 		config.Project = envvar.GetTestProjectFromEnv()
-		network, err := tpgcompute.NewClient(config, config.UserAgent).Networks.Get(envvar.GetTestProjectFromEnv(), networkName).Do()
+		networkUrl := fmt.Sprintf("%sprojects/%s/global/networks/%s", transport_tpg.BaseUrl(tpgcompute.Product, config), config.Project, networkName)
+		network, err := transport_tpg.SendRequest(transport_tpg.SendRequestOptions{
+			Config:    config,
+			Method:    "GET",
+			Project:   config.Project,
+			RawURL:    networkUrl,
+			UserAgent: config.UserAgent,
+		})
 		if err != nil {
 			return err
 		}
+		netName, _ := network["name"].(string)
 
-		foundFirewalls, err := tpgcompute.NewClient(config, config.UserAgent).Firewalls.List(config.Project).Do()
+		firewallsUrl := fmt.Sprintf("%sprojects/%s/global/firewalls", transport_tpg.BaseUrl(tpgcompute.Product, config), config.Project)
+		foundFirewalls, err := transport_tpg.SendRequest(transport_tpg.SendRequestOptions{
+			Config:    config,
+			Method:    "GET",
+			Project:   config.Project,
+			RawURL:    firewallsUrl,
+			UserAgent: config.UserAgent,
+		})
 		if err != nil {
-			return fmt.Errorf("unable to list firewalls for network %q: %s", network.Name, err)
+			return fmt.Errorf("unable to list firewalls for network %q: %s", netName, err)
 		}
 
 		var allErrors error
-		for _, firewall := range foundFirewalls.Items {
-			if !strings.HasPrefix(firewall.Name, testComposerNetworkPrefix) {
+		items, _ := foundFirewalls["items"].([]interface{})
+		for _, item := range items {
+			firewall, ok := item.(map[string]interface{})
+			if !ok {
 				continue
 			}
-			log.Printf("[DEBUG] Deleting firewall %q for test-resource network %q", firewall.Name, network.Name)
-			op, err := tpgcompute.NewClient(config, config.UserAgent).Firewalls.Delete(config.Project, firewall.Name).Do()
+			firewallName, _ := firewall["name"].(string)
+			if !strings.HasPrefix(firewallName, testComposerNetworkPrefix) {
+				continue
+			}
+			log.Printf("[DEBUG] Deleting firewall %q for test-resource network %q", firewallName, netName)
+			deleteUrl := fmt.Sprintf("%sprojects/%s/global/firewalls/%s", transport_tpg.BaseUrl(tpgcompute.Product, config), config.Project, firewallName)
+			op, err := transport_tpg.SendRequest(transport_tpg.SendRequestOptions{
+				Config:    config,
+				Method:    "DELETE",
+				Project:   config.Project,
+				RawURL:    deleteUrl,
+				UserAgent: config.UserAgent,
+			})
 			if err != nil {
-				allErrors = errors.Join(allErrors, fmt.Errorf("unable to delete firewalls for network %q: %s", network.Name, err))
+				allErrors = errors.Join(allErrors, fmt.Errorf("unable to delete firewalls for network %q: %s", netName, err))
 				continue
 			}
 
 			waitErr := tpgcompute.ComputeOperationWaitTime(config, op, config.Project,
 				"Sweeping test composer environment firewalls", config.UserAgent, 10)
 			if waitErr != nil {
-				allErrors = errors.Join(allErrors, fmt.Errorf("error while waiting to delete firewall %q: %s", firewall.Name, waitErr))
+				allErrors = errors.Join(allErrors, fmt.Errorf("error while waiting to delete firewall %q: %s", firewallName, waitErr))
 			}
 		}
 		return allErrors
